@@ -30,6 +30,7 @@ export function AdminPanel({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [importDate, setImportDate] = useState(new Date().toISOString().split('T')[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -96,7 +97,15 @@ export function AdminPanel({
 
   const handleImportConfirm = () => {
     if (csvPreview) {
-      onImportCSV(csvPreview);
+      // Apply the selected import date to all reviews
+      const reviewDate = new Date(importDate);
+      const reviewsWithDate = csvPreview.map((r) => ({
+        ...r,
+        createdAt: reviewDate,
+        updatedAt: reviewDate,
+        completedAt: r.status === 'reviewed' ? reviewDate : undefined,
+      }));
+      onImportCSV(reviewsWithDate);
       setCsvPreview(null);
       setImagePreview(null);
       if (fileInputRef.current) {
@@ -144,54 +153,72 @@ export function AdminPanel({
   const parseOCRText = (text: string): Omit<Review, 'id'>[] => {
     const lines = text.split('\n').filter((line) => line.trim());
     const reviews: Omit<Review, 'id'>[] = [];
+    const reviewDate = new Date(importDate);
 
-    // Try to find table rows - look for lines with candidate names and reviewer names
-    // The table structure is: Name | Type | Purpose | Location | Assigned To
+    // Debug: log the OCR text
+    console.log('OCR Text:', text);
+
+    // Try to find table rows - look for lines containing CANDIDACY as an anchor
     for (const line of lines) {
       // Skip header-like lines
-      if (line.toLowerCase().includes('name') && line.toLowerCase().includes('type')) continue;
-      if (line.toLowerCase().includes('entity type')) continue;
-      if (line.toLowerCase().includes('assigned to')) continue;
-      if (line.toLowerCase().includes('search')) continue;
-      if (line.toLowerCase().includes('review queue')) continue;
+      const lowerLine = line.toLowerCase();
+      if (lowerLine.includes('name') && lowerLine.includes('type')) continue;
+      if (lowerLine.includes('entity type')) continue;
+      if (lowerLine.includes('assigned to') && lowerLine.includes('purpose')) continue;
+      if (lowerLine.includes('search')) continue;
+      if (lowerLine.includes('review queue')) continue;
+      if (lowerLine.includes('reviewed documents')) continue;
 
-      // Look for lines that have a name pattern (capitalized words)
-      const words = line.split(/\s{2,}|\t/).filter((w) => w.trim());
+      // Look for lines containing CANDIDACY (the type column)
+      if (line.includes('CANDIDACY') || line.includes('Candidacy')) {
+        // Split by multiple spaces or tabs
+        const parts = line.split(/\s{2,}|\t/).map((p) => p.trim()).filter(Boolean);
 
-      if (words.length >= 2) {
-        // Check if first word looks like a name (has capital letters, not all caps keywords)
-        const firstName = words[0].trim();
-        if (
-          firstName &&
-          firstName.length > 2 &&
-          /^[A-Z][a-z]/.test(firstName) &&
-          !['CANDIDACY', 'CORE', 'Texas'].includes(firstName)
-        ) {
-          // This looks like a candidate/review name
-          const title = firstName;
-          let reviewer = '';
+        if (parts.length >= 2) {
+          // Find the name (text before CANDIDACY)
+          let name = '';
+          let type = 'CANDIDACY';
           let location = '';
+          let reviewer = '';
 
-          // Find reviewer (usually last column, has first+last name pattern)
-          for (let i = words.length - 1; i >= 0; i--) {
-            const word = words[i].trim();
-            // Check if it looks like a person's name (First Last or First O'Last)
-            if (/^[A-Z][a-z]+\s+[A-Z]/.test(word) || /^[A-Z][a-z]+\s+O'[A-Z]/.test(word)) {
-              reviewer = word;
-              break;
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+
+            // Name is usually first part before CANDIDACY
+            if (i === 0 && !part.includes('CANDIDACY')) {
+              name = part.replace(/[^\w\s'-]/g, '').trim(); // Clean up OCR artifacts
+            }
+
+            // Type
+            if (part.includes('CANDIDACY') || part.includes('Candidacy')) {
+              type = 'CANDIDACY';
+              // If name wasn't found, it might be merged with CANDIDACY
+              if (!name && i === 0) {
+                const match = part.match(/^(.+?)\s*CANDIDACY/i);
+                if (match) name = match[1].trim();
+              }
+            }
+
+            // Location (contains USA, state abbreviations, or common state names)
+            if (part.includes('USA') || part.includes('Texas') || part.includes('Carolina') ||
+                part.includes('California') || /[A-Z]{2},\s*USA/.test(part) ||
+                /North\s+Carolina|South\s+Carolina/.test(part)) {
+              location = part;
+            }
+
+            // Reviewer (last meaningful name - First Last pattern at end)
+            // Common reviewer names from the screenshot
+            if (/^[A-Z][a-z]+\s+[A-Z][a-z]+/.test(part) &&
+                !part.includes('USA') && !part.includes('Carolina') && !part.includes('Texas') &&
+                !part.includes('CANDIDACY') && !part.includes('CORE')) {
+              reviewer = part;
             }
           }
 
-          // Find location (usually contains state abbreviation or "USA")
-          for (const word of words) {
-            if (word.includes('USA') || /[A-Z]{2},/.test(word) || word.includes('Texas')) {
-              location = word.trim();
-              break;
-            }
-          }
+          // Build title as Name + Type
+          if (name) {
+            const title = `${name} ${type}`;
 
-          if (title) {
-            const now = new Date();
             reviews.push({
               title,
               description: '',
@@ -200,10 +227,44 @@ export function AdminPanel({
               status: 'needs_review',
               priority: 'medium',
               assigneeId: reviewer || undefined,
-              createdAt: now,
-              updatedAt: now,
+              createdAt: reviewDate,
+              updatedAt: reviewDate,
               estimatedMinutes: 60,
               jurisdiction: location || undefined,
+            });
+          }
+        }
+      }
+    }
+
+    // If we didn't find CANDIDACY-based rows, try a more general approach
+    if (reviews.length === 0) {
+      // Look for any line that has name-like patterns followed by keywords
+      for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+        if (lowerLine.includes('name') && lowerLine.includes('type')) continue;
+        if (lowerLine.includes('review queue')) continue;
+
+        // Match pattern: Name (2+ words starting with caps) followed by type keywords
+        const match = line.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z']+)+)/g);
+        if (match && match.length >= 1) {
+          // First match is likely the name
+          const name = match[0];
+          // Last match might be reviewer (if different from name)
+          const reviewer = match.length > 1 ? match[match.length - 1] : '';
+
+          if (name && name !== reviewer) {
+            reviews.push({
+              title: `${name} CANDIDACY`,
+              description: '',
+              type: 'deep_research_candidate',
+              category: 'full_review',
+              status: 'needs_review',
+              priority: 'medium',
+              assigneeId: reviewer || undefined,
+              createdAt: reviewDate,
+              updatedAt: reviewDate,
+              estimatedMinutes: 60,
             });
           }
         }
@@ -468,20 +529,39 @@ export function AdminPanel({
                 Preview: {csvPreview.length} reviews to import
               </p>
               <button
-                onClick={() => setCsvPreview(null)}
+                onClick={() => {
+                  setCsvPreview(null);
+                  setImagePreview(null);
+                }}
                 className="text-blue-600 hover:text-blue-800"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="max-h-40 overflow-y-auto space-y-1 text-sm">
-              {csvPreview.slice(0, 5).map((r, i) => (
-                <div key={i} className="text-blue-700">
-                  {r.title} - {r.completedAt ? new Date(r.completedAt).toLocaleDateString() : 'No date'}
+
+            {/* Editable Import Date */}
+            <div className="mb-3 flex items-center gap-3">
+              <label className="text-sm font-medium text-blue-800">Import Date:</label>
+              <input
+                type="date"
+                value={importDate}
+                onChange={(e) => setImportDate(e.target.value)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white"
+              />
+            </div>
+
+            <div className="max-h-48 overflow-y-auto space-y-2 text-sm">
+              {csvPreview.slice(0, 10).map((r, i) => (
+                <div key={i} className="bg-white/50 p-2 rounded-lg">
+                  <div className="font-medium text-blue-900">{r.title}</div>
+                  <div className="text-blue-600 text-xs flex gap-3 mt-1">
+                    {r.jurisdiction && <span>Location: {r.jurisdiction}</span>}
+                    {r.assigneeId && <span>Assigned: {r.assigneeId}</span>}
+                  </div>
                 </div>
               ))}
-              {csvPreview.length > 5 && (
-                <div className="text-blue-500">...and {csvPreview.length - 5} more</div>
+              {csvPreview.length > 10 && (
+                <div className="text-blue-500">...and {csvPreview.length - 10} more</div>
               )}
             </div>
             <button
