@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2, Pencil, Check, ChevronDown, Calendar, CheckSquare } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import type { Review, User } from '../types';
@@ -35,6 +35,66 @@ export function AdminPanel({
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [completionDate, setCompletionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedForImport, setSelectedForImport] = useState<Set<number>>(new Set());
+
+  // Check for duplicates in preview
+  const existingTitles = new Set(reviews.map((r) => r.title.toLowerCase().trim()));
+  const duplicateIndices = csvPreview
+    ? new Set(
+        csvPreview
+          .map((r, i) => (existingTitles.has(r.title.toLowerCase().trim()) ? i : -1))
+          .filter((i) => i >= 0)
+      )
+    : new Set<number>();
+  const duplicateCount = duplicateIndices.size;
+
+  // Initialize selection when csvPreview changes (select all non-duplicates by default)
+  useEffect(() => {
+    if (csvPreview) {
+      const nonDuplicates = new Set(
+        csvPreview.map((_, i) => i).filter((i) => !duplicateIndices.has(i))
+      );
+      setSelectedForImport(nonDuplicates);
+    } else {
+      setSelectedForImport(new Set());
+    }
+  }, [csvPreview?.length]);
+
+  // Import selection helpers
+  const handleToggleImportItem = (index: number) => {
+    const newSelected = new Set(selectedForImport);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedForImport(newSelected);
+  };
+
+  const handleSelectAllForImport = () => {
+    if (csvPreview) {
+      setSelectedForImport(new Set(csvPreview.map((_, i) => i)));
+    }
+  };
+
+  const handleDeselectAllForImport = () => {
+    setSelectedForImport(new Set());
+  };
+
+  const handleSkipDuplicates = () => {
+    const nonDuplicates = new Set(
+      Array.from(selectedForImport).filter((i) => !duplicateIndices.has(i))
+    );
+    setSelectedForImport(nonDuplicates);
+  };
+
+  const handleImportOnlyDuplicates = () => {
+    const duplicates = new Set(
+      csvPreview?.map((_, i) => i).filter((i) => duplicateIndices.has(i)) ?? []
+    );
+    setSelectedForImport(duplicates);
+  };
+
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState('');
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
@@ -190,19 +250,22 @@ export function AdminPanel({
   };
 
   const handleImportConfirm = () => {
-    if (csvPreview) {
-      // Apply the selected completion date to all reviews (parse as local time)
+    if (csvPreview && selectedForImport.size > 0) {
+      // Apply the selected completion date to selected reviews only (parse as local time)
       const reviewDate = new Date(completionDate + 'T00:00:00');
-      const reviewsWithDate = csvPreview.map((r) => ({
-        ...r,
-        createdAt: reviewDate,
-        updatedAt: reviewDate,
-        completedAt: reviewDate,
-        status: 'reviewed' as const,
-      }));
+      const reviewsWithDate = csvPreview
+        .filter((_, i) => selectedForImport.has(i))
+        .map((r) => ({
+          ...r,
+          createdAt: reviewDate,
+          updatedAt: reviewDate,
+          completedAt: reviewDate,
+          status: 'reviewed' as const,
+        }));
       onImportCSV(reviewsWithDate);
       setCsvPreview(null);
       setImagePreview(null);
+      setSelectedForImport(new Set());
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -697,13 +760,21 @@ export function AdminPanel({
         {csvPreview && (
           <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
             <div className="flex items-center justify-between mb-3">
-              <p className="font-medium text-blue-800">
-                Preview: {csvPreview.length} reviews to import
-              </p>
+              <div>
+                <p className="font-medium text-blue-800">
+                  Preview: {csvPreview.length} reviews found
+                </p>
+                {duplicateCount > 0 && (
+                  <p className="text-sm text-amber-600 mt-1">
+                    {duplicateCount} potential duplicate{duplicateCount > 1 ? 's' : ''} detected (already in system)
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setCsvPreview(null);
                   setImagePreview(null);
+                  setSelectedForImport(new Set());
                 }}
                 className="text-blue-600 hover:text-blue-800"
               >
@@ -722,25 +793,97 @@ export function AdminPanel({
               />
             </div>
 
-            <div className="max-h-48 overflow-y-auto space-y-2 text-sm">
-              {csvPreview.slice(0, 10).map((r, i) => (
-                <div key={i} className="bg-white/50 p-2 rounded-lg">
-                  <div className="font-medium text-blue-900">{r.title}</div>
-                  <div className="text-blue-600 text-xs flex gap-3 mt-1">
-                    {r.jurisdiction && <span>Location: {r.jurisdiction}</span>}
-                    {r.assigneeId && <span>Assigned: {r.assigneeId}</span>}
-                  </div>
-                </div>
-              ))}
-              {csvPreview.length > 10 && (
-                <div className="text-blue-500">...and {csvPreview.length - 10} more</div>
+            {/* Bulk Selection Actions */}
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button
+                onClick={handleSelectAllForImport}
+                className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+              >
+                Select All ({csvPreview.length})
+              </button>
+              <button
+                onClick={handleDeselectAllForImport}
+                className="px-3 py-1 text-xs bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                Deselect All
+              </button>
+              {duplicateCount > 0 && (
+                <>
+                  <button
+                    onClick={handleSkipDuplicates}
+                    className="px-3 py-1 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
+                  >
+                    Skip Duplicates ({duplicateCount})
+                  </button>
+                  <button
+                    onClick={handleImportOnlyDuplicates}
+                    className="px-3 py-1 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
+                  >
+                    Select Only Duplicates
+                  </button>
+                </>
               )}
+            </div>
+
+            {/* Selection Summary */}
+            <div className="mb-3 text-sm text-blue-700">
+              {selectedForImport.size} of {csvPreview.length} selected for import
+              {selectedForImport.size > 0 && duplicateCount > 0 && (
+                <span className="text-amber-600 ml-2">
+                  ({Array.from(selectedForImport).filter((i) => duplicateIndices.has(i)).length} duplicates)
+                </span>
+              )}
+            </div>
+
+            <div className="max-h-64 overflow-y-auto space-y-2 text-sm">
+              {csvPreview.map((r, i) => {
+                const isDupe = duplicateIndices.has(i);
+                const isSelected = selectedForImport.has(i);
+                return (
+                  <div
+                    key={i}
+                    className={`p-2 rounded-lg flex items-start gap-3 cursor-pointer transition-colors ${
+                      isSelected
+                        ? isDupe
+                          ? 'bg-amber-100 border border-amber-300'
+                          : 'bg-white border border-blue-300'
+                        : 'bg-white/50 border border-transparent opacity-60'
+                    }`}
+                    onClick={() => handleToggleImportItem(i)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleImportItem(i)}
+                      className="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium ${isDupe ? 'text-amber-900' : 'text-blue-900'}`}>
+                          {r.title}
+                        </span>
+                        {isDupe && (
+                          <span className="px-1.5 py-0.5 text-xs bg-amber-200 text-amber-800 rounded">
+                            Duplicate
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-blue-600 text-xs flex gap-3 mt-1">
+                        {r.jurisdiction && <span>Location: {r.jurisdiction}</span>}
+                        {r.assigneeId && <span>Assigned: {r.assigneeId}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <button
               onClick={handleImportConfirm}
-              className="mt-3 w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={selectedForImport.size === 0}
+              className="mt-3 w-full px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Import {csvPreview.length} Reviews
+              Import {selectedForImport.size} Review{selectedForImport.size !== 1 ? 's' : ''}
             </button>
           </div>
         )}
