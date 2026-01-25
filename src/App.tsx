@@ -7,17 +7,61 @@ import {
   Clock,
   TrendingUp,
   Users,
+  ClipboardList,
+  LogOut,
 } from 'lucide-react';
-import { StatsCard, ProgressRing, AdminPanel } from './components';
+import { StatsCard, ProgressRing, AdminPanel, TeammatePanel } from './components';
 import { reviews as initialReviews, researchers } from './data/mockData';
-import type { Review } from './types';
+import type { Review, User } from './types';
 import { format, subDays, startOfDay } from 'date-fns';
 
-type View = 'dashboard' | 'admin';
+type View = 'dashboard' | 'admin' | 'log-review';
+
+// Default admin user
+const adminUser: User = {
+  id: 'admin-1',
+  name: 'Nava Friedman',
+  initials: 'NF',
+  email: 'nava@change.org',
+  role: 'admin',
+  color: '#8b5cf6',
+};
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [reviews, setReviews] = useState<Review[]>(initialReviews);
+  const [currentUser, setCurrentUser] = useState<User>(adminUser);
+  const [teammates, setTeammates] = useState<User[]>([]);
+
+  const isAdmin = currentUser.role === 'admin';
+
+  // Handle teammate management
+  const handleAddTeammate = (teammate: Omit<User, 'id'>) => {
+    const newTeammate: User = {
+      ...teammate,
+      id: `teammate-${Date.now()}`,
+    };
+    setTeammates((prev) => [...prev, newTeammate]);
+  };
+
+  const handleRemoveTeammate = (id: string) => {
+    setTeammates((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Handle user switching (for demo/testing)
+  const handleSwitchUser = (user: User) => {
+    setCurrentUser(user);
+    // Reset to dashboard when switching users
+    setCurrentView('dashboard');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(adminUser);
+    setCurrentView('dashboard');
+  };
+
+  // Get all users (admin + teammates) for user switcher
+  const allUsers = [adminUser, ...teammates];
 
   // Calculate stats
   const completedReviews = reviews.filter((r) => r.status === 'reviewed');
@@ -48,10 +92,18 @@ function App() {
   const individualProgress = useMemo(() => {
     const byPerson: Record<string, { name: string; count: number; color: string }> = {};
 
-    // Initialize with all researchers
+    // Initialize with all researchers from mock data
     researchers.forEach((r) => {
       byPerson[r.id] = { name: r.name, count: 0, color: r.color };
     });
+
+    // Add teammates
+    teammates.forEach((t) => {
+      byPerson[t.id] = { name: t.name, count: 0, color: t.color };
+    });
+
+    // Add admin user
+    byPerson[adminUser.id] = { name: adminUser.name, count: 0, color: adminUser.color };
 
     // Count completed reviews per person
     completedReviews.forEach((r) => {
@@ -61,7 +113,7 @@ function App() {
     });
 
     return Object.values(byPerson).sort((a, b) => b.count - a.count);
-  }, [completedReviews]);
+  }, [completedReviews, teammates]);
 
   const maxIndividualCount = Math.max(...individualProgress.map((p) => p.count), 1);
 
@@ -92,11 +144,16 @@ function App() {
     );
   };
 
-  // Navigation
-  const navItems = [
-    { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'admin' as View, icon: Settings, label: 'Admin' },
-  ];
+  // Navigation - different items based on role
+  const navItems = isAdmin
+    ? [
+        { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'admin' as View, icon: Settings, label: 'Admin' },
+      ]
+    : [
+        { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'log-review' as View, icon: ClipboardList, label: 'Log Review' },
+      ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -140,19 +197,56 @@ function App() {
           </ul>
         </nav>
 
-        {/* User */}
+        {/* User Switcher */}
         <div className="p-4 border-t border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-medium">
-              NF
+          {/* Current User */}
+          <div className="flex items-center gap-3 mb-3">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium"
+              style={{ backgroundColor: currentUser.color }}
+            >
+              {currentUser.initials}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">
-                Nava Friedman
+                {currentUser.name}
               </p>
-              <p className="text-xs text-slate-500">Team Lead</p>
+              <p className="text-xs text-slate-500">{isAdmin ? 'Admin' : 'Team Member'}</p>
             </div>
           </div>
+
+          {/* User Switcher (when teammates exist) */}
+          {teammates.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Switch User</p>
+              {allUsers.map((user) => (
+                user.id !== currentUser.id && (
+                  <button
+                    key={user.id}
+                    onClick={() => handleSwitchUser(user)}
+                    className="w-full flex items-center gap-2 p-2 text-left text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                  >
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-white font-medium"
+                      style={{ backgroundColor: user.color }}
+                    >
+                      {user.initials}
+                    </div>
+                    <span className="truncate">{user.name}</span>
+                  </button>
+                )
+              ))}
+              {!isAdmin && (
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 p-2 text-left text-sm text-slate-500 hover:bg-slate-50 rounded-lg transition-colors mt-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Back to Admin</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </aside>
 
@@ -162,12 +256,18 @@ function App() {
         <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200">
           <div className="px-8 py-4">
             <h2 className="text-2xl font-bold text-slate-900">
-              {currentView === 'dashboard' ? 'Dashboard' : 'Admin Panel'}
+              {currentView === 'dashboard'
+                ? 'Dashboard'
+                : currentView === 'admin'
+                ? 'Admin Panel'
+                : 'Log Review'}
             </h2>
             <p className="text-sm text-slate-500">
               {currentView === 'dashboard'
                 ? 'Track review progress across the team'
-                : 'Manage review data'}
+                : currentView === 'admin'
+                ? 'Manage team and review data'
+                : 'Log your completed reviews'}
             </p>
           </div>
         </header>
@@ -307,13 +407,24 @@ function App() {
             </div>
           )}
 
-          {currentView === 'admin' && (
+          {currentView === 'admin' && isAdmin && (
             <AdminPanel
               reviews={reviews}
+              teammates={teammates}
               onAddReview={handleAddReview}
               onImportCSV={handleImportCSV}
               onDeleteReview={handleDeleteReview}
               onUpdateReview={handleUpdateReview}
+              onAddTeammate={handleAddTeammate}
+              onRemoveTeammate={handleRemoveTeammate}
+            />
+          )}
+
+          {currentView === 'log-review' && !isAdmin && (
+            <TeammatePanel
+              reviews={reviews}
+              currentUser={currentUser}
+              onAddReview={handleAddReview}
             />
           )}
         </div>

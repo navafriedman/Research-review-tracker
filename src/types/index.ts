@@ -155,3 +155,15 @@ export interface Activity {
   message: string;
   timestamp: Date;
 }
+
+// User roles for access control
+export type UserRole = 'admin' | 'teammate';
+
+export interface User {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  role: UserRole;
+  color: string;
+}

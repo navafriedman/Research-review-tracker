@@ -1,25 +1,38 @@
 import { useState, useRef } from 'react';
-import { Upload, Plus, Trash2, Save, FileSpreadsheet, X } from 'lucide-react';
-import type { Review } from '../types';
+import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus } from 'lucide-react';
+import type { Review, User } from '../types';
 
 interface AdminPanelProps {
   reviews: Review[];
+  teammates: User[];
   onAddReview: (review: Omit<Review, 'id'>) => void;
   onImportCSV: (reviews: Omit<Review, 'id'>[]) => void;
   onDeleteReview: (id: string) => void;
   onUpdateReview: (id: string, updates: Partial<Review>) => void;
+  onAddTeammate: (teammate: Omit<User, 'id'>) => void;
+  onRemoveTeammate: (id: string) => void;
 }
 
 export function AdminPanel({
   reviews,
+  teammates,
   onAddReview,
   onImportCSV,
   onDeleteReview,
   onUpdateReview,
+  onAddTeammate,
+  onRemoveTeammate,
 }: AdminPanelProps) {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddTeammate, setShowAddTeammate] = useState(false);
   const [csvPreview, setCsvPreview] = useState<Omit<Review, 'id'>[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Teammate form state
+  const [teammateForm, setTeammateForm] = useState({
+    name: '',
+    email: '',
+  });
 
   // Form state for manual entry
   const [formData, setFormData] = useState({
@@ -118,8 +131,134 @@ export function AdminPanel({
     });
   };
 
+  const handleAddTeammate = () => {
+    if (!teammateForm.name || !teammateForm.email) return;
+
+    // Generate initials from name
+    const initials = teammateForm.name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+
+    // Generate a random color
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    onAddTeammate({
+      name: teammateForm.name,
+      email: teammateForm.email,
+      initials,
+      role: 'teammate',
+      color,
+    });
+
+    setTeammateForm({ name: '', email: '' });
+    setShowAddTeammate(false);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Team Management Section */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+            <Users className="w-5 h-5 text-purple-500" />
+            Team Management
+          </h3>
+          {!showAddTeammate && (
+            <button
+              onClick={() => setShowAddTeammate(true)}
+              className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Teammate
+            </button>
+          )}
+        </div>
+
+        {showAddTeammate && (
+          <div className="space-y-4 p-4 bg-purple-50 rounded-xl mb-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={teammateForm.name}
+                  onChange={(e) => setTeammateForm({ ...teammateForm, name: e.target.value })}
+                  placeholder="John Doe"
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={teammateForm.email}
+                  onChange={(e) => setTeammateForm({ ...teammateForm, email: e.target.value })}
+                  placeholder="john@example.com"
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddTeammate}
+                disabled={!teammateForm.name || !teammateForm.email}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Add Teammate
+              </button>
+              <button
+                onClick={() => setShowAddTeammate(false)}
+                className="px-4 py-2 text-slate-600 font-medium rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Team List */}
+        <div className="space-y-2">
+          {teammates.length === 0 ? (
+            <p className="text-slate-500 text-center py-4">No teammates added yet. Click "Add Teammate" to invite team members.</p>
+          ) : (
+            teammates.map((teammate) => (
+              <div
+                key={teammate.id}
+                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                    style={{ backgroundColor: teammate.color }}
+                  >
+                    {teammate.initials}
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900">{teammate.name}</p>
+                    <p className="text-sm text-slate-500">{teammate.email}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onRemoveTeammate(teammate.id)}
+                  className="text-red-500 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Upload Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
