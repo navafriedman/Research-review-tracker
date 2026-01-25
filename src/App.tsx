@@ -292,7 +292,7 @@ function App() {
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-900">Review Tracker</h1>
+              <h1 className="font-bold text-slate-900">Q1 Candidate Review</h1>
               <p className="text-xs text-slate-500">Elections HiTL</p>
             </div>
           </div>
@@ -383,7 +383,7 @@ function App() {
           <div className="px-8 py-4">
             <h2 className="text-2xl font-bold text-slate-900">
               {currentView === 'dashboard'
-                ? 'Dashboard'
+                ? 'Q1 Candidate Review Tracker'
                 : currentView === 'admin'
                 ? 'Admin Panel'
                 : currentView === 'settings'
