@@ -496,7 +496,6 @@ function App() {
                               </div>
                               <span className="text-xs font-medium text-slate-400">{day.label}</span>
                               <span className="text-xs text-slate-500">{day.date}</span>
-                              <span className="text-sm font-bold text-slate-900">{day.count}</span>
                             </div>
                           );
                         })}
