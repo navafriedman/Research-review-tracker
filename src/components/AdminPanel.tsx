@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2 } from 'lucide-react';
+import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2, Pencil, Check } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import type { Review, User } from '../types';
 
@@ -30,7 +30,9 @@ export function AdminPanel({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [importDate, setImportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [completionDate, setCompletionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editingDate, setEditingDate] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,13 +99,14 @@ export function AdminPanel({
 
   const handleImportConfirm = () => {
     if (csvPreview) {
-      // Apply the selected import date to all reviews
-      const reviewDate = new Date(importDate);
+      // Apply the selected completion date to all reviews
+      const reviewDate = new Date(completionDate);
       const reviewsWithDate = csvPreview.map((r) => ({
         ...r,
         createdAt: reviewDate,
         updatedAt: reviewDate,
-        completedAt: r.status === 'reviewed' ? reviewDate : undefined,
+        completedAt: reviewDate,
+        status: 'reviewed' as const,
       }));
       onImportCSV(reviewsWithDate);
       setCsvPreview(null);
@@ -115,6 +118,20 @@ export function AdminPanel({
         imageInputRef.current.value = '';
       }
     }
+  };
+
+  const handleEditDate = (reviewId: string, currentDate: Date | undefined) => {
+    setEditingReviewId(reviewId);
+    setEditingDate(currentDate ? new Date(currentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+  };
+
+  const handleSaveDate = (reviewId: string) => {
+    onUpdateReview(reviewId, {
+      completedAt: new Date(editingDate),
+      updatedAt: new Date(),
+    });
+    setEditingReviewId(null);
+    setEditingDate('');
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,7 +170,7 @@ export function AdminPanel({
   const parseOCRText = (text: string): Omit<Review, 'id'>[] => {
     const lines = text.split('\n').filter((line) => line.trim());
     const reviews: Omit<Review, 'id'>[] = [];
-    const reviewDate = new Date(importDate);
+    const reviewDate = new Date(completionDate);
 
     // Debug: log the OCR text
     console.log('OCR Text:', text);
@@ -539,13 +556,13 @@ export function AdminPanel({
               </button>
             </div>
 
-            {/* Editable Import Date */}
+            {/* Editable Completion Date */}
             <div className="mb-3 flex items-center gap-3">
-              <label className="text-sm font-medium text-blue-800">Import Date:</label>
+              <label className="text-sm font-medium text-blue-800">Completion Date:</label>
               <input
                 type="date"
-                value={importDate}
-                onChange={(e) => setImportDate(e.target.value)}
+                value={completionDate}
+                onChange={(e) => setCompletionDate(e.target.value)}
                 className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white"
               />
             </div>
@@ -698,7 +715,38 @@ export function AdminPanel({
                     </span>
                   </td>
                   <td className="py-3 px-4 text-sm text-slate-500">
-                    {review.completedAt ? new Date(review.completedAt).toLocaleDateString() : '-'}
+                    {editingReviewId === review.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="date"
+                          value={editingDate}
+                          onChange={(e) => setEditingDate(e.target.value)}
+                          className="px-2 py-1 text-sm rounded border border-slate-300 focus:border-blue-500 outline-none"
+                        />
+                        <button
+                          onClick={() => handleSaveDate(review.id)}
+                          className="text-emerald-600 hover:text-emerald-700 p-1"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingReviewId(null)}
+                          className="text-slate-400 hover:text-slate-600 p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span>{review.completedAt ? new Date(review.completedAt).toLocaleDateString() : '-'}</span>
+                        <button
+                          onClick={() => handleEditDate(review.id, review.completedAt)}
+                          className="text-slate-400 hover:text-slate-600 p-1"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-2">
