@@ -26,8 +26,7 @@ export function AdminPanel({
     title: '',
     reviewer: '',
     status: 'reviewed' as Review['status'],
-    completedAt: new Date().toISOString().split('T')[0],
-    qualityScore: 5,
+    date: new Date().toISOString().split('T')[0],
   });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,12 +46,16 @@ export function AdminPanel({
     const lines = text.trim().split('\n');
     const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
 
-    return lines.slice(1).map(line => {
+    return lines.slice(1).filter(line => line.trim()).map(line => {
       const values = line.split(',').map(v => v.trim());
       const row: Record<string, string> = {};
       headers.forEach((h, i) => {
         row[h] = values[i] || '';
       });
+
+      // Parse date from various possible column names
+      const dateStr = row.date || row.completed || row.completed_at || row.completeddate;
+      const parsedDate = dateStr ? new Date(dateStr) : new Date();
 
       return {
         title: row.title || row.review || row.name || 'Untitled Review',
@@ -62,12 +65,11 @@ export function AdminPanel({
         status: (row.status as Review['status']) || 'reviewed',
         priority: (row.priority as Review['priority']) || 'medium',
         assigneeId: row.assignee || row.reviewer || row.assigneeid || undefined,
-        createdAt: row.created ? new Date(row.created) : new Date(),
-        updatedAt: row.updated ? new Date(row.updated) : new Date(),
-        completedAt: row.completed ? new Date(row.completed) : new Date(),
-        estimatedMinutes: parseInt(row.estimated || '60', 10),
-        actualMinutes: parseInt(row.actual || row.minutes || '60', 10),
-        qualityScore: parseFloat(row.quality || row.score || '4.5'),
+        createdAt: parsedDate,
+        updatedAt: parsedDate,
+        completedAt: parsedDate,
+        estimatedMinutes: 60,
+        actualMinutes: 60,
         jurisdiction: row.jurisdiction || row.location || undefined,
         race: row.race || undefined,
       };
@@ -85,6 +87,7 @@ export function AdminPanel({
   };
 
   const handleManualAdd = () => {
+    const reviewDate = new Date(formData.date);
     onAddReview({
       title: formData.title,
       type: 'deep_research_race',
@@ -92,19 +95,17 @@ export function AdminPanel({
       status: formData.status,
       priority: 'medium',
       assigneeId: formData.reviewer || undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      completedAt: formData.status === 'reviewed' ? new Date(formData.completedAt) : undefined,
+      createdAt: reviewDate,
+      updatedAt: reviewDate,
+      completedAt: formData.status === 'reviewed' ? reviewDate : undefined,
       estimatedMinutes: 60,
       actualMinutes: 60,
-      qualityScore: formData.qualityScore,
     });
     setFormData({
       title: '',
       reviewer: '',
       status: 'reviewed',
-      completedAt: new Date().toISOString().split('T')[0],
-      qualityScore: 5,
+      date: new Date().toISOString().split('T')[0],
     });
     setShowAddForm(false);
   };
@@ -143,7 +144,7 @@ export function AdminPanel({
             <div>
               <p className="font-medium text-slate-700">Drop CSV file here or click to upload</p>
               <p className="text-sm text-slate-500 mt-1">
-                Expected columns: title, reviewer, status, completed, quality
+                Expected columns: title, reviewer, date, status
               </p>
             </div>
           </label>
@@ -166,7 +167,7 @@ export function AdminPanel({
             <div className="max-h-40 overflow-y-auto space-y-1 text-sm">
               {csvPreview.slice(0, 5).map((r, i) => (
                 <div key={i} className="text-blue-700">
-                  {r.title} - {r.status}
+                  {r.title} - {r.completedAt ? new Date(r.completedAt).toLocaleDateString() : 'No date'}
                 </div>
               ))}
               {csvPreview.length > 5 && (
@@ -245,33 +246,16 @@ export function AdminPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Completed Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.completedAt}
-                  onChange={(e) => setFormData({ ...formData, completedAt: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Quality Score (1-5)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="5"
-                  step="0.1"
-                  value={formData.qualityScore}
-                  onChange={(e) => setFormData({ ...formData, qualityScore: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Date
+              </label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+              />
             </div>
 
             <div className="flex gap-3 pt-2">
