@@ -9,13 +9,14 @@ interface StatsCardProps {
     value: number;
     isPositive: boolean;
   };
-  color?: 'blue' | 'green' | 'amber' | 'purple' | 'pink';
+  color?: 'blue' | 'green' | 'amber' | 'orange' | 'purple' | 'pink';
 }
 
 const colorClasses = {
   blue: 'from-blue-500 to-blue-600',
   green: 'from-emerald-500 to-emerald-600',
   amber: 'from-amber-500 to-amber-600',
+  orange: 'from-orange-500 to-orange-600',
   purple: 'from-purple-500 to-purple-600',
   pink: 'from-pink-500 to-pink-600',
 };

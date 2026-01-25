@@ -420,7 +420,7 @@ function App() {
                   value={totalGoal - completedReviews.length}
                   subtitle="reviews to go"
                   icon={<Clock className="w-6 h-6" />}
-                  color="blue"
+                  color="orange"
                 />
                 <StatsCard
                   title="Team Members"
