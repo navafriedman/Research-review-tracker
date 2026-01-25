@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2, Pencil, Check } from 'lucide-react';
+import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2, Pencil, Check, ChevronDown, Calendar, CheckSquare } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import type { Review, User } from '../types';
 
@@ -13,6 +13,8 @@ interface AdminPanelProps {
   onAddTeammate: (teammate: Omit<User, 'id'>) => void;
   onUpdateTeammate: (id: string, updates: Partial<User>) => void;
   onRemoveTeammate: (id: string) => void;
+  onBulkDelete?: (ids: string[]) => void;
+  onBulkUpdate?: (ids: string[], updates: Partial<Review>) => void;
 }
 
 export function AdminPanel({
@@ -40,6 +42,77 @@ export function AdminPanel({
   const [editTeammateForm, setEditTeammateForm] = useState({ name: '', email: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Load more and bulk operations
+  const [visibleCount, setVisibleCount] = useState(10);
+  const [selectedReviews, setSelectedReviews] = useState<Set<string>>(new Set());
+  const [bulkDate, setBulkDate] = useState(new Date().toISOString().split('T')[0]);
+  const [bulkStatus, setBulkStatus] = useState<Review['status']>('reviewed');
+  const [showBulkDatePicker, setShowBulkDatePicker] = useState(false);
+  const [showBulkStatusPicker, setShowBulkStatusPicker] = useState(false);
+
+  const visibleReviews = reviews.slice(0, visibleCount);
+  const hasMore = visibleCount < reviews.length;
+
+  const handleSelectReview = (id: string) => {
+    const newSelected = new Set(selectedReviews);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedReviews(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedReviews.size === visibleReviews.length) {
+      setSelectedReviews(new Set());
+    } else {
+      setSelectedReviews(new Set(visibleReviews.map((r) => r.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedReviews.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedReviews.size} reviews?`)) return;
+
+    selectedReviews.forEach((id) => onDeleteReview(id));
+    setSelectedReviews(new Set());
+  };
+
+  const handleBulkUpdateDate = () => {
+    if (selectedReviews.size === 0) return;
+    const date = new Date(bulkDate);
+    selectedReviews.forEach((id) => {
+      onUpdateReview(id, {
+        completedAt: date,
+        updatedAt: new Date(),
+      });
+    });
+    setSelectedReviews(new Set());
+    setShowBulkDatePicker(false);
+  };
+
+  const handleBulkUpdateStatus = () => {
+    if (selectedReviews.size === 0) return;
+    selectedReviews.forEach((id) => {
+      onUpdateReview(id, {
+        status: bulkStatus,
+        completedAt: bulkStatus === 'reviewed' ? new Date() : undefined,
+        updatedAt: new Date(),
+      });
+    });
+    setSelectedReviews(new Set());
+    setShowBulkStatusPicker(false);
+  };
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => Math.min(prev + 20, reviews.length));
+  };
+
+  const handleShowAll = () => {
+    setVisibleCount(reviews.length);
+  };
 
   // Teammate form state
   const [teammateForm, setTeammateForm] = useState({
@@ -767,12 +840,113 @@ export function AdminPanel({
 
       {/* Recent Reviews Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h3 className="font-semibold text-slate-900 mb-4">Recent Reviews</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-slate-900">
+            All Reviews ({reviews.length} total)
+          </h3>
+
+          {/* Bulk Actions */}
+          {selectedReviews.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500">{selectedReviews.size} selected</span>
+
+              {/* Bulk Date Update */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowBulkDatePicker(!showBulkDatePicker)}
+                  className="px-3 py-1.5 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Set Date
+                </button>
+                {showBulkDatePicker && (
+                  <div className="absolute right-0 top-full mt-1 p-3 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                    <input
+                      type="date"
+                      value={bulkDate}
+                      onChange={(e) => setBulkDate(e.target.value)}
+                      className="px-3 py-1.5 text-sm rounded border border-slate-300 focus:border-blue-500 outline-none mb-2"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleBulkUpdateDate}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Apply
+                      </button>
+                      <button
+                        onClick={() => setShowBulkDatePicker(false)}
+                        className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bulk Status Update */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowBulkStatusPicker(!showBulkStatusPicker)}
+                  className="px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors flex items-center gap-1"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Set Status
+                </button>
+                {showBulkStatusPicker && (
+                  <div className="absolute right-0 top-full mt-1 p-3 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                    <select
+                      value={bulkStatus}
+                      onChange={(e) => setBulkStatus(e.target.value as Review['status'])}
+                      className="px-3 py-1.5 text-sm rounded border border-slate-300 focus:border-purple-500 outline-none mb-2 w-full"
+                    >
+                      <option value="reviewed">Completed</option>
+                      <option value="in_review">In Progress</option>
+                      <option value="needs_review">Pending</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleBulkUpdateStatus}
+                        className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+                      >
+                        Apply
+                      </button>
+                      <button
+                        onClick={() => setShowBulkStatusPicker(false)}
+                        className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bulk Delete */}
+              <button
+                onClick={handleBulkDelete}
+                className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center gap-1"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200">
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-500 w-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedReviews.size === visibleReviews.length && visibleReviews.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Title</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Date</th>
@@ -780,8 +954,16 @@ export function AdminPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {reviews.slice(0, 10).map((review) => (
-                <tr key={review.id} className="hover:bg-slate-50">
+              {visibleReviews.map((review) => (
+                <tr key={review.id} className={`hover:bg-slate-50 ${selectedReviews.has(review.id) ? 'bg-blue-50' : ''}`}>
+                  <td className="py-3 px-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedReviews.has(review.id)}
+                      onChange={() => handleSelectReview(review.id)}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="py-3 px-4 text-sm text-slate-900">{review.title}</td>
                   <td className="py-3 px-4">
                     {editingStatusId === review.id ? (
@@ -835,15 +1017,13 @@ export function AdminPanel({
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditDate(review.id, review.completedAt)}
+                        className="flex items-center gap-2 hover:text-slate-700 cursor-pointer"
+                      >
                         <span>{review.completedAt ? new Date(review.completedAt).toLocaleDateString() : '-'}</span>
-                        <button
-                          onClick={() => handleEditDate(review.id, review.completedAt)}
-                          className="text-slate-400 hover:text-slate-600 p-1"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                      </div>
+                        <Pencil className="w-3 h-3 opacity-50" />
+                      </button>
                     )}
                   </td>
                   <td className="py-3 px-4 text-right">
@@ -869,6 +1049,32 @@ export function AdminPanel({
             </tbody>
           </table>
         </div>
+
+        {/* Load More */}
+        {reviews.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-sm text-slate-500">
+              Showing {visibleReviews.length} of {reviews.length} reviews
+            </span>
+            {hasMore && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleLoadMore}
+                  className="px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  Load More
+                </button>
+                <button
+                  onClick={handleShowAll}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Show All
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

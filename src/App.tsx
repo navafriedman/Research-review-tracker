@@ -480,23 +480,28 @@ function App() {
                 {/* Daily Progress */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                   <h3 className="font-semibold text-slate-900 mb-6">Daily Progress (Last 7 Days)</h3>
-                  <div className="flex items-end justify-between gap-2 h-48">
-                    {dailyProgress.map((day) => {
-                      const height = day.count > 0 ? Math.max((day.count / 10) * 100, 10) : 4;
-                      return (
-                        <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
-                          <div className="relative w-full h-40 flex items-end justify-center">
-                            <div
-                              className="w-10 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-500"
-                              style={{ height: `${height}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-medium text-slate-500">{day.label}</span>
-                          <span className="text-sm font-bold text-slate-900">{day.count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {(() => {
+                    const maxDailyCount = Math.max(...dailyProgress.map(d => d.count), 1);
+                    return (
+                      <div className="flex items-end justify-between gap-2 h-48">
+                        {dailyProgress.map((day) => {
+                          const height = day.count > 0 ? Math.max((day.count / maxDailyCount) * 100, 5) : 2;
+                          return (
+                            <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
+                              <div className="relative w-full h-40 flex items-end justify-center">
+                                <div
+                                  className="w-10 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-500"
+                                  style={{ height: `${height}%` }}
+                                />
+                              </div>
+                              <span className="text-xs font-medium text-slate-500">{day.label}</span>
+                              <span className="text-sm font-bold text-slate-900">{day.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
