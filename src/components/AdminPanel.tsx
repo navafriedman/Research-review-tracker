@@ -11,6 +11,7 @@ interface AdminPanelProps {
   onDeleteReview: (id: string) => void;
   onUpdateReview: (id: string, updates: Partial<Review>) => void;
   onAddTeammate: (teammate: Omit<User, 'id'>) => void;
+  onUpdateTeammate: (id: string, updates: Partial<User>) => void;
   onRemoveTeammate: (id: string) => void;
 }
 
@@ -22,6 +23,7 @@ export function AdminPanel({
   onDeleteReview,
   onUpdateReview,
   onAddTeammate,
+  onUpdateTeammate,
   onRemoveTeammate,
 }: AdminPanelProps) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -34,6 +36,8 @@ export function AdminPanel({
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState('');
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [editingTeammateId, setEditingTeammateId] = useState<string | null>(null);
+  const [editTeammateForm, setEditTeammateForm] = useState({ name: '', email: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -42,6 +46,19 @@ export function AdminPanel({
     name: '',
     email: '',
   });
+
+  const handleStartEditTeammate = (teammate: User) => {
+    setEditingTeammateId(teammate.id);
+    setEditTeammateForm({ name: teammate.name, email: teammate.email });
+  };
+
+  const handleSaveTeammate = (id: string) => {
+    onUpdateTeammate(id, {
+      name: editTeammateForm.name,
+      email: editTeammateForm.email,
+    });
+    setEditingTeammateId(null);
+  };
 
   // Form state for manual entry
   const [formData, setFormData] = useState({
@@ -437,24 +454,77 @@ export function AdminPanel({
                 key={teammate.id}
                 className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
               >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white"
-                    style={{ backgroundColor: teammate.color }}
-                  >
-                    {teammate.initials}
+                {editingTeammateId === teammate.id ? (
+                  // Edit mode
+                  <div className="flex-1 flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white shrink-0"
+                      style={{ backgroundColor: teammate.color }}
+                    >
+                      {teammate.initials}
+                    </div>
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={editTeammateForm.name}
+                        onChange={(e) => setEditTeammateForm({ ...editTeammateForm, name: e.target.value })}
+                        placeholder="Name"
+                        className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 focus:border-purple-500 outline-none"
+                      />
+                      <input
+                        type="email"
+                        value={editTeammateForm.email}
+                        onChange={(e) => setEditTeammateForm({ ...editTeammateForm, email: e.target.value })}
+                        placeholder="Email (optional)"
+                        className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 focus:border-purple-500 outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleSaveTeammate(teammate.id)}
+                        className="text-emerald-600 hover:text-emerald-700 p-2 hover:bg-emerald-50 rounded-lg transition-colors"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingTeammateId(null)}
+                        className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-900">{teammate.name}</p>
-                    <p className="text-sm text-slate-500">{teammate.email}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onRemoveTeammate(teammate.id)}
-                  className="text-red-500 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                ) : (
+                  // View mode
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                        style={{ backgroundColor: teammate.color }}
+                      >
+                        {teammate.initials}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-900">{teammate.name}</p>
+                        <p className="text-sm text-slate-500">{teammate.email || 'No email'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleStartEditTeammate(teammate)}
+                        className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onRemoveTeammate(teammate.id)}
+                        className="text-red-500 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}

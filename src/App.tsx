@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   LayoutDashboard,
   Settings,
@@ -9,13 +9,13 @@ import {
   Users,
   ClipboardList,
   LogOut,
+  Cloud,
 } from 'lucide-react';
-import { StatsCard, ProgressRing, AdminPanel, TeammatePanel } from './components';
-import { reviews as initialReviews, researchers } from './data/mockData';
+import { StatsCard, ProgressRing, AdminPanel, TeammatePanel, SettingsPanel } from './components';
 import type { Review, User } from './types';
 import { format, subDays, startOfDay } from 'date-fns';
 
-type View = 'dashboard' | 'admin' | 'log-review';
+type View = 'dashboard' | 'admin' | 'log-review' | 'settings';
 
 // Default admin user
 const adminUser: User = {
@@ -27,21 +27,116 @@ const adminUser: User = {
   color: '#8b5cf6',
 };
 
+// Storage keys
+const STORAGE_KEYS = {
+  reviews: 'review-tracker-reviews',
+  teammates: 'review-tracker-teammates',
+};
+
+// Load data from localStorage
+const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Convert date strings back to Date objects for reviews
+      if (key === STORAGE_KEYS.reviews) {
+        return parsed.map((r: Review) => ({
+          ...r,
+          createdAt: new Date(r.createdAt),
+          updatedAt: new Date(r.updatedAt),
+          completedAt: r.completedAt ? new Date(r.completedAt) : undefined,
+          dueDate: r.dueDate ? new Date(r.dueDate) : undefined,
+        })) as T;
+      }
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Error loading from storage:', e);
+  }
+  return defaultValue;
+};
+
+// Save data to localStorage
+const saveToStorage = <T,>(key: string, data: T): void => {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving to storage:', e);
+  }
+};
+
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [reviews, setReviews] = useState<Review[]>(initialReviews);
+  const [reviews, setReviews] = useState<Review[]>(() => loadFromStorage(STORAGE_KEYS.reviews, []));
   const [currentUser, setCurrentUser] = useState<User>(adminUser);
-  const [teammates, setTeammates] = useState<User[]>([]);
+  const [teammates, setTeammates] = useState<User[]>(() => loadFromStorage(STORAGE_KEYS.teammates, []));
 
   const isAdmin = currentUser.role === 'admin';
 
+  // Save to localStorage when data changes
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.reviews, reviews);
+  }, [reviews]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.teammates, teammates);
+  }, [teammates]);
+
+  // Helper to generate user from name
+  const createUserFromName = (name: string): User => {
+    const initials = name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    return {
+      id: `teammate-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name,
+      initials,
+      email: '',
+      role: 'teammate',
+      color,
+    };
+  };
+
   // Handle teammate management
   const handleAddTeammate = (teammate: Omit<User, 'id'>) => {
+    // Check if teammate with same name already exists
+    const exists = teammates.some(
+      (t) => t.name.toLowerCase() === teammate.name.toLowerCase()
+    );
+    if (exists) return;
+
     const newTeammate: User = {
       ...teammate,
       id: `teammate-${Date.now()}`,
     };
     setTeammates((prev) => [...prev, newTeammate]);
+  };
+
+  const handleUpdateTeammate = (id: string, updates: Partial<User>) => {
+    setTeammates((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          const updated = { ...t, ...updates };
+          // Regenerate initials if name changed
+          if (updates.name) {
+            updated.initials = updates.name
+              .split(' ')
+              .map((n) => n[0])
+              .join('')
+              .toUpperCase()
+              .slice(0, 2);
+          }
+          return updated;
+        }
+        return t;
+      })
+    );
   };
 
   const handleRemoveTeammate = (id: string) => {
@@ -88,31 +183,39 @@ function App() {
     return days;
   }, [completedReviews]);
 
-  // Progress by individual
+  // Progress by individual - using teammates and assigneeId names
   const individualProgress = useMemo(() => {
     const byPerson: Record<string, { name: string; count: number; color: string }> = {};
 
-    // Initialize with all researchers from mock data
-    researchers.forEach((r) => {
-      byPerson[r.id] = { name: r.name, count: 0, color: r.color };
-    });
-
     // Add teammates
     teammates.forEach((t) => {
-      byPerson[t.id] = { name: t.name, count: 0, color: t.color };
+      byPerson[t.name.toLowerCase()] = { name: t.name, count: 0, color: t.color };
     });
 
     // Add admin user
-    byPerson[adminUser.id] = { name: adminUser.name, count: 0, color: adminUser.color };
+    byPerson[adminUser.name.toLowerCase()] = { name: adminUser.name, count: 0, color: adminUser.color };
 
-    // Count completed reviews per person
+    // Count completed reviews per person (by name match)
     completedReviews.forEach((r) => {
-      if (r.assigneeId && byPerson[r.assigneeId]) {
-        byPerson[r.assigneeId].count++;
+      if (r.assigneeId) {
+        const assigneeLower = r.assigneeId.toLowerCase();
+        if (byPerson[assigneeLower]) {
+          byPerson[assigneeLower].count++;
+        } else {
+          // Check if any teammate name matches partially
+          const matchingKey = Object.keys(byPerson).find(
+            (key) => assigneeLower.includes(key) || key.includes(assigneeLower)
+          );
+          if (matchingKey) {
+            byPerson[matchingKey].count++;
+          }
+        }
       }
     });
 
-    return Object.values(byPerson).sort((a, b) => b.count - a.count);
+    return Object.values(byPerson)
+      .filter((p) => p.count > 0 || teammates.some((t) => t.name === p.name) || p.name === adminUser.name)
+      .sort((a, b) => b.count - a.count);
   }, [completedReviews, teammates]);
 
   const maxIndividualCount = Math.max(...individualProgress.map((p) => p.count), 1);
@@ -127,6 +230,28 @@ function App() {
   };
 
   const handleImportCSV = (importedReviews: Omit<Review, 'id'>[]) => {
+    // Auto-add any new reviewers to the team
+    const existingNames = new Set([
+      adminUser.name.toLowerCase(),
+      ...teammates.map((t) => t.name.toLowerCase()),
+    ]);
+
+    const newTeammates: User[] = [];
+    importedReviews.forEach((r) => {
+      if (r.assigneeId) {
+        const nameLower = r.assigneeId.toLowerCase();
+        if (!existingNames.has(nameLower)) {
+          existingNames.add(nameLower);
+          newTeammates.push(createUserFromName(r.assigneeId));
+        }
+      }
+    });
+
+    if (newTeammates.length > 0) {
+      setTeammates((prev) => [...prev, ...newTeammates]);
+    }
+
+    // Import the reviews
     const newReviews = importedReviews.map((r, i) => ({
       ...r,
       id: `rev-import-${Date.now()}-${i}`,
@@ -149,6 +274,7 @@ function App() {
     ? [
         { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
         { id: 'admin' as View, icon: Settings, label: 'Admin' },
+        { id: 'settings' as View, icon: Cloud, label: 'Sync & Export' },
       ]
     : [
         { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
@@ -260,6 +386,8 @@ function App() {
                 ? 'Dashboard'
                 : currentView === 'admin'
                 ? 'Admin Panel'
+                : currentView === 'settings'
+                ? 'Sync & Export'
                 : 'Log Review'}
             </h2>
             <p className="text-sm text-slate-500">
@@ -267,6 +395,8 @@ function App() {
                 ? 'Track review progress across the team'
                 : currentView === 'admin'
                 ? 'Manage team and review data'
+                : currentView === 'settings'
+                ? 'Export data and sync with Google Sheets'
                 : 'Log your completed reviews'}
             </p>
           </div>
@@ -294,7 +424,7 @@ function App() {
                 />
                 <StatsCard
                   title="Team Members"
-                  value={researchers.length}
+                  value={teammates.length + 1}
                   subtitle="active reviewers"
                   icon={<Users className="w-6 h-6" />}
                   color="purple"
@@ -416,6 +546,7 @@ function App() {
               onDeleteReview={handleDeleteReview}
               onUpdateReview={handleUpdateReview}
               onAddTeammate={handleAddTeammate}
+              onUpdateTeammate={handleUpdateTeammate}
               onRemoveTeammate={handleRemoveTeammate}
             />
           )}
@@ -425,6 +556,14 @@ function App() {
               reviews={reviews}
               currentUser={currentUser}
               onAddReview={handleAddReview}
+            />
+          )}
+
+          {currentView === 'settings' && isAdmin && (
+            <SettingsPanel
+              reviews={reviews}
+              teammates={teammates}
+              onImportData={() => {}}
             />
           )}
         </div>

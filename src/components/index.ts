@@ -13,3 +13,4 @@ export { Confetti, SuccessBurst } from './Confetti';
 export { ResearcherProfile } from './ResearcherProfile';
 export { AdminPanel } from './AdminPanel';
 export { TeammatePanel } from './TeammatePanel';
+export { SettingsPanel } from './SettingsPanel';
