@@ -160,7 +160,7 @@ function App() {
 
   // Calculate stats
   const completedReviews = reviews.filter((r) => r.status === 'reviewed');
-  const totalGoal = 200;
+  const totalGoal = 352;
   const progressPercent = Math.round((completedReviews.length / totalGoal) * 100);
 
   // Daily progress for last 7 days
@@ -487,14 +487,15 @@ function App() {
                         {dailyProgress.map((day) => {
                           const height = day.count > 0 ? Math.max((day.count / maxDailyCount) * 100, 5) : 2;
                           return (
-                            <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
-                              <div className="relative w-full h-40 flex items-end justify-center">
+                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                              <div className="relative w-full h-36 flex items-end justify-center">
                                 <div
                                   className="w-10 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-500"
                                   style={{ height: `${height}%` }}
                                 />
                               </div>
-                              <span className="text-xs font-medium text-slate-500">{day.label}</span>
+                              <span className="text-xs font-medium text-slate-400">{day.label}</span>
+                              <span className="text-xs text-slate-500">{day.date}</span>
                               <span className="text-sm font-bold text-slate-900">{day.count}</span>
                             </div>
                           );
