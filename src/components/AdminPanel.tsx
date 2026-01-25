@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus } from 'lucide-react';
+import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2 } from 'lucide-react';
+import Tesseract from 'tesseract.js';
 import type { Review, User } from '../types';
 
 interface AdminPanelProps {
@@ -26,7 +27,11 @@ export function AdminPanel({
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAddTeammate, setShowAddTeammate] = useState(false);
   const [csvPreview, setCsvPreview] = useState<Omit<Review, 'id'>[] | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [ocrProgress, setOcrProgress] = useState<number>(0);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Teammate form state
   const [teammateForm, setTeammateForm] = useState({
@@ -93,10 +98,119 @@ export function AdminPanel({
     if (csvPreview) {
       onImportCSV(csvPreview);
       setCsvPreview(null);
+      setImagePreview(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
     }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Show image preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Process with OCR
+    setIsProcessingImage(true);
+    setOcrProgress(0);
+
+    try {
+      const result = await Tesseract.recognize(file, 'eng', {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(Math.round(m.progress * 100));
+          }
+        },
+      });
+
+      const parsed = parseOCRText(result.data.text);
+      setCsvPreview(parsed);
+    } catch (error) {
+      console.error('OCR failed:', error);
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  const parseOCRText = (text: string): Omit<Review, 'id'>[] => {
+    const lines = text.split('\n').filter((line) => line.trim());
+    const reviews: Omit<Review, 'id'>[] = [];
+
+    // Try to find table rows - look for lines with candidate names and reviewer names
+    // The table structure is: Name | Type | Purpose | Location | Assigned To
+    for (const line of lines) {
+      // Skip header-like lines
+      if (line.toLowerCase().includes('name') && line.toLowerCase().includes('type')) continue;
+      if (line.toLowerCase().includes('entity type')) continue;
+      if (line.toLowerCase().includes('assigned to')) continue;
+      if (line.toLowerCase().includes('search')) continue;
+      if (line.toLowerCase().includes('review queue')) continue;
+
+      // Look for lines that have a name pattern (capitalized words)
+      const words = line.split(/\s{2,}|\t/).filter((w) => w.trim());
+
+      if (words.length >= 2) {
+        // Check if first word looks like a name (has capital letters, not all caps keywords)
+        const firstName = words[0].trim();
+        if (
+          firstName &&
+          firstName.length > 2 &&
+          /^[A-Z][a-z]/.test(firstName) &&
+          !['CANDIDACY', 'CORE', 'Texas'].includes(firstName)
+        ) {
+          // This looks like a candidate/review name
+          const title = firstName;
+          let reviewer = '';
+          let location = '';
+
+          // Find reviewer (usually last column, has first+last name pattern)
+          for (let i = words.length - 1; i >= 0; i--) {
+            const word = words[i].trim();
+            // Check if it looks like a person's name (First Last or First O'Last)
+            if (/^[A-Z][a-z]+\s+[A-Z]/.test(word) || /^[A-Z][a-z]+\s+O'[A-Z]/.test(word)) {
+              reviewer = word;
+              break;
+            }
+          }
+
+          // Find location (usually contains state abbreviation or "USA")
+          for (const word of words) {
+            if (word.includes('USA') || /[A-Z]{2},/.test(word) || word.includes('Texas')) {
+              location = word.trim();
+              break;
+            }
+          }
+
+          if (title) {
+            const now = new Date();
+            reviews.push({
+              title,
+              description: '',
+              type: 'deep_research_candidate',
+              category: 'full_review',
+              status: 'needs_review',
+              priority: 'medium',
+              assigneeId: reviewer || undefined,
+              createdAt: now,
+              updatedAt: now,
+              estimatedMinutes: 60,
+              jurisdiction: location || undefined,
+            });
+          }
+        }
+      }
+    }
+
+    return reviews;
   };
 
   const handleManualAdd = () => {
@@ -262,32 +376,89 @@ export function AdminPanel({
       {/* Upload Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <FileSpreadsheet className="w-5 h-5 text-blue-500" />
-          Import from CSV
+          <Upload className="w-5 h-5 text-blue-500" />
+          Import Reviews
         </h3>
 
-        <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleFileUpload}
-            className="hidden"
-            id="csv-upload"
-          />
-          <label
-            htmlFor="csv-upload"
-            className="cursor-pointer flex flex-col items-center gap-3"
-          >
-            <Upload className="w-10 h-10 text-slate-400" />
-            <div>
-              <p className="font-medium text-slate-700">Drop CSV file here or click to upload</p>
-              <p className="text-sm text-slate-500 mt-1">
-                Expected columns: title, reviewer, date, status
-              </p>
-            </div>
-          </label>
+        <div className="grid grid-cols-2 gap-4">
+          {/* CSV Upload */}
+          <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="csv-upload"
+            />
+            <label
+              htmlFor="csv-upload"
+              className="cursor-pointer flex flex-col items-center gap-3"
+            >
+              <FileSpreadsheet className="w-8 h-8 text-slate-400" />
+              <div>
+                <p className="font-medium text-slate-700">Upload CSV</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  title, reviewer, date, status
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Image/Screenshot Upload */}
+          <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-purple-400 transition-colors">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+              id="image-upload"
+            />
+            <label
+              htmlFor="image-upload"
+              className="cursor-pointer flex flex-col items-center gap-3"
+            >
+              <Image className="w-8 h-8 text-slate-400" />
+              <div>
+                <p className="font-medium text-slate-700">Upload Screenshot</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Table image with OCR
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
+
+        {/* Image Processing Progress */}
+        {isProcessingImage && (
+          <div className="mt-4 p-4 bg-purple-50 rounded-xl border border-purple-200">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-purple-800">Processing image with OCR...</p>
+                <div className="mt-2 h-2 bg-purple-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-600 transition-all duration-300"
+                    style={{ width: `${ocrProgress}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-sm font-medium text-purple-600">{ocrProgress}%</span>
+            </div>
+          </div>
+        )}
+
+        {/* Image Preview */}
+        {imagePreview && !isProcessingImage && (
+          <div className="mt-4">
+            <img
+              src={imagePreview}
+              alt="Uploaded screenshot"
+              className="max-h-40 rounded-lg border border-slate-200 mx-auto"
+            />
+          </div>
+        )}
 
         {/* CSV Preview */}
         {csvPreview && (
