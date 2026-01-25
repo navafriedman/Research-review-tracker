@@ -487,10 +487,14 @@ function App() {
                         {dailyProgress.map((day) => {
                           const height = day.count > 0 ? Math.max((day.count / maxDailyCount) * 100, 5) : 2;
                           return (
-                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1 group">
                               <div className="relative w-full h-36 flex items-end justify-center">
+                                {/* Tooltip on hover */}
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                  {day.count} review{day.count !== 1 ? 's' : ''}
+                                </div>
                                 <div
-                                  className="w-10 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-500"
+                                  className="w-10 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-500 cursor-pointer hover:from-blue-600 hover:to-blue-500"
                                   style={{ height: `${height}%` }}
                                 />
                               </div>
