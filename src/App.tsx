@@ -409,16 +409,16 @@ function App() {
               {/* Stats Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatsCard
-                  title="Total Completed"
+                  title="Completed"
                   value={completedReviews.length}
                   subtitle={`of ${totalGoal} goal`}
                   icon={<CheckCircle2 className="w-6 h-6" />}
                   color="green"
                 />
                 <StatsCard
-                  title="In Progress"
-                  value={reviews.filter((r) => r.status === 'in_review').length}
-                  subtitle="currently active"
+                  title="Remaining"
+                  value={totalGoal - completedReviews.length}
+                  subtitle="reviews to go"
                   icon={<Clock className="w-6 h-6" />}
                   color="blue"
                 />
