@@ -82,7 +82,8 @@ export function AdminPanel({
 
   const handleBulkUpdateDate = () => {
     if (selectedReviews.size === 0) return;
-    const date = new Date(bulkDate);
+    // Parse as local time by appending T00:00:00
+    const date = new Date(bulkDate + 'T00:00:00');
     selectedReviews.forEach((id) => {
       onUpdateReview(id, {
         completedAt: date,
@@ -190,8 +191,8 @@ export function AdminPanel({
 
   const handleImportConfirm = () => {
     if (csvPreview) {
-      // Apply the selected completion date to all reviews
-      const reviewDate = new Date(completionDate);
+      // Apply the selected completion date to all reviews (parse as local time)
+      const reviewDate = new Date(completionDate + 'T00:00:00');
       const reviewsWithDate = csvPreview.map((r) => ({
         ...r,
         createdAt: reviewDate,
@@ -217,8 +218,9 @@ export function AdminPanel({
   };
 
   const handleSaveDate = (reviewId: string) => {
+    // Parse as local time by appending T00:00:00
     onUpdateReview(reviewId, {
-      completedAt: new Date(editingDate),
+      completedAt: new Date(editingDate + 'T00:00:00'),
       updatedAt: new Date(),
     });
     setEditingReviewId(null);
