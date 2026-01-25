@@ -11,3 +11,4 @@ export {
 } from './AchievementBadge';
 export { Confetti, SuccessBurst } from './Confetti';
 export { ResearcherProfile } from './ResearcherProfile';
+export { AdminPanel } from './AdminPanel';
