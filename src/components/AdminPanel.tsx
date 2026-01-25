@@ -33,6 +33,7 @@ export function AdminPanel({
   const [completionDate, setCompletionDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState('');
+  const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -132,6 +133,15 @@ export function AdminPanel({
     });
     setEditingReviewId(null);
     setEditingDate('');
+  };
+
+  const handleStatusChange = (reviewId: string, newStatus: Review['status']) => {
+    onUpdateReview(reviewId, {
+      status: newStatus,
+      completedAt: newStatus === 'reviewed' ? new Date() : undefined,
+      updatedAt: new Date(),
+    });
+    setEditingStatusId(null);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -704,15 +714,33 @@ export function AdminPanel({
                 <tr key={review.id} className="hover:bg-slate-50">
                   <td className="py-3 px-4 text-sm text-slate-900">{review.title}</td>
                   <td className="py-3 px-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      review.status === 'reviewed'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : review.status === 'in_review'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {review.status === 'reviewed' ? 'Completed' : review.status === 'in_review' ? 'In Progress' : 'Pending'}
-                    </span>
+                    {editingStatusId === review.id ? (
+                      <select
+                        value={review.status}
+                        onChange={(e) => handleStatusChange(review.id, e.target.value as Review['status'])}
+                        onBlur={() => setEditingStatusId(null)}
+                        autoFocus
+                        className="px-2 py-1 text-xs rounded border border-slate-300 focus:border-blue-500 outline-none"
+                      >
+                        <option value="reviewed">Completed</option>
+                        <option value="in_review">In Progress</option>
+                        <option value="needs_review">Pending</option>
+                      </select>
+                    ) : (
+                      <button
+                        onClick={() => setEditingStatusId(review.id)}
+                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full cursor-pointer hover:opacity-80 ${
+                          review.status === 'reviewed'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : review.status === 'in_review'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {review.status === 'reviewed' ? 'Completed' : review.status === 'in_review' ? 'In Progress' : 'Pending'}
+                        <Pencil className="w-2.5 h-2.5 opacity-50" />
+                      </button>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-sm text-slate-500">
                     {editingReviewId === review.id ? (
