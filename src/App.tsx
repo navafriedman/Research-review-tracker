@@ -292,8 +292,8 @@ function App() {
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-900">Q1 Candidate Review</h1>
-              <p className="text-xs text-slate-500">Elections HiTL</p>
+              <h1 className="font-bold text-slate-900">Elections Review Tracker</h1>
+              <p className="text-xs text-slate-500">HiTL</p>
             </div>
           </div>
         </div>
