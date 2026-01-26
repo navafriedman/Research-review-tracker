@@ -572,7 +572,21 @@ function App() {
             <SettingsPanel
               reviews={reviews}
               teammates={teammates}
-              onImportData={() => {}}
+              onImportData={(data) => {
+                // Import reviews with new IDs
+                const newReviews = data.reviews.map((r, i) => ({
+                  ...r,
+                  id: crypto.randomUUID ? crypto.randomUUID() : `import-${Date.now()}-${i}`,
+                }));
+                setReviews(newReviews);
+
+                // Import teammates with new IDs
+                const newTeammates = data.teammates.map((t, i) => ({
+                  ...t,
+                  id: crypto.randomUUID ? crypto.randomUUID() : `teammate-${Date.now()}-${i}`,
+                }));
+                setTeammates(newTeammates);
+              }}
             />
           )}
         </div>

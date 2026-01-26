@@ -10,9 +10,10 @@ interface SettingsPanelProps {
 
 const SHEETS_URL_KEY = 'review-tracker-sheets-url';
 
-export function SettingsPanel({ reviews, teammates }: SettingsPanelProps) {
+export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPanelProps) {
   const [sheetsUrl, setSheetsUrl] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState('');
 
@@ -111,6 +112,63 @@ export function SettingsPanel({ reviews, teammates }: SettingsPanelProps) {
     }
   };
 
+  const handleLoadFromSheets = async () => {
+    if (!sheetsUrl) {
+      setSyncStatus('error');
+      setSyncMessage('Please enter your Google Sheets Web App URL');
+      return;
+    }
+
+    if (!onImportData) {
+      setSyncStatus('error');
+      setSyncMessage('Import not available');
+      return;
+    }
+
+    setIsLoading(true);
+    setSyncStatus('idle');
+
+    try {
+      // Use the URL with ?action=load to get data
+      const loadUrl = sheetsUrl.includes('?')
+        ? `${sheetsUrl}&action=load`
+        : `${sheetsUrl}?action=load`;
+
+      const response = await fetch(loadUrl);
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const importedReviews = (data.reviews || []).map((r: Record<string, string>) => ({
+        title: r.title || '',
+        status: r.status || 'pending',
+        completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+        assigneeId: r.assigneeId || undefined,
+        jurisdiction: r.jurisdiction || '',
+      }));
+
+      const importedTeammates = (data.teammates || []).map((t: Record<string, string>) => ({
+        name: t.name || '',
+        email: t.email || '',
+        color: t.color || 'blue',
+      }));
+
+      onImportData({ reviews: importedReviews, teammates: importedTeammates });
+
+      setSyncStatus('success');
+      setSyncMessage(`Loaded ${importedReviews.length} reviews and ${importedTeammates.length} teammates`);
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage('Failed to load data. Make sure the script is deployed correctly.');
+      console.error('Load error:', error);
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Export Section */}
@@ -152,10 +210,69 @@ export function SettingsPanel({ reviews, teammates }: SettingsPanelProps) {
             <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
               <li>Create a new Google Sheet</li>
               <li>Go to Extensions → Apps Script</li>
-              <li>Paste the script code (see documentation)</li>
-              <li>Deploy as web app (Anyone can access)</li>
+              <li>Paste the script code below</li>
+              <li>Deploy as web app (Execute as: Me, Who has access: Anyone)</li>
               <li>Copy the web app URL and paste below</li>
             </ol>
+            <details className="mt-3">
+              <summary className="text-sm text-amber-800 font-medium cursor-pointer hover:text-amber-900">
+                View Apps Script Code
+              </summary>
+              <pre className="mt-2 p-3 bg-slate-900 text-slate-100 text-xs rounded-lg overflow-x-auto whitespace-pre-wrap">
+{`function doPost(e) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+  const data = JSON.parse(e.postData.contents);
+
+  // Save reviews
+  let reviewSheet = sheet.getSheetByName('Reviews');
+  if (!reviewSheet) reviewSheet = sheet.insertSheet('Reviews');
+  reviewSheet.clear();
+  reviewSheet.appendRow(['id','title','status','completedAt','assigneeId','jurisdiction']);
+  data.reviews.forEach(r => {
+    reviewSheet.appendRow([r.id,r.title,r.status,r.completedAt,r.assigneeId,r.jurisdiction]);
+  });
+
+  // Save teammates
+  let teamSheet = sheet.getSheetByName('Teammates');
+  if (!teamSheet) teamSheet = sheet.insertSheet('Teammates');
+  teamSheet.clear();
+  teamSheet.appendRow(['id','name','email','color']);
+  data.teammates.forEach(t => {
+    teamSheet.appendRow([t.id,t.name,t.email,t.color]);
+  });
+
+  return ContentService.createTextOutput(JSON.stringify({success:true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Load reviews
+  const reviewSheet = sheet.getSheetByName('Reviews');
+  const reviews = [];
+  if (reviewSheet && reviewSheet.getLastRow() > 1) {
+    const data = reviewSheet.getRange(2,1,reviewSheet.getLastRow()-1,6).getValues();
+    data.forEach(row => {
+      reviews.push({id:row[0],title:row[1],status:row[2],completedAt:row[3],assigneeId:row[4],jurisdiction:row[5]});
+    });
+  }
+
+  // Load teammates
+  const teamSheet = sheet.getSheetByName('Teammates');
+  const teammates = [];
+  if (teamSheet && teamSheet.getLastRow() > 1) {
+    const data = teamSheet.getRange(2,1,teamSheet.getLastRow()-1,4).getValues();
+    data.forEach(row => {
+      teammates.push({id:row[0],name:row[1],email:row[2],color:row[3]});
+    });
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({reviews,teammates}))
+    .setMimeType(ContentService.MimeType.JSON);
+}`}
+              </pre>
+            </details>
           </div>
 
           <div>
@@ -183,7 +300,7 @@ export function SettingsPanel({ reviews, teammates }: SettingsPanelProps) {
             <div className="flex gap-3">
               <button
                 onClick={handleSyncToSheets}
-                disabled={isSyncing}
+                disabled={isSyncing || isLoading}
                 className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 {isSyncing ? (
@@ -192,6 +309,18 @@ export function SettingsPanel({ reviews, teammates }: SettingsPanelProps) {
                   <Upload className="w-4 h-4" />
                 )}
                 Push to Sheets
+              </button>
+              <button
+                onClick={handleLoadFromSheets}
+                disabled={isSyncing || isLoading}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                Pull from Sheets
               </button>
             </div>
           )}
