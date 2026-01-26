@@ -71,6 +71,7 @@ function App() {
   const [reviews, setReviews] = useState<Review[]>(() => loadFromStorage(STORAGE_KEYS.reviews, []));
   const [currentUser, setCurrentUser] = useState<User>(adminUser);
   const [teammates, setTeammates] = useState<User[]>(() => loadFromStorage(STORAGE_KEYS.teammates, []));
+  const [selectedTeammateId, setSelectedTeammateId] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === 'admin';
 
@@ -212,8 +213,14 @@ function App() {
   const allUsers = [adminUser, ...teammates];
 
   // Calculate stats
-  const completedReviews = reviews.filter((r) => r.status === 'reviewed');
-  const totalGoal = 352;
+  const allCompletedReviews = reviews.filter((r) => r.status === 'reviewed');
+  const selectedTeammate = selectedTeammateId
+    ? teammates.find((t) => t.id === selectedTeammateId)
+    : null;
+  const completedReviews = selectedTeammateId
+    ? allCompletedReviews.filter((r) => r.assigneeId === selectedTeammateId)
+    : allCompletedReviews;
+  const totalGoal = selectedTeammateId ? Math.round(352 / Math.max(teammates.length, 1)) : 352;
   const progressPercent = Math.round((completedReviews.length / totalGoal) * 100);
 
   // Daily progress for last 7 days
@@ -238,18 +245,18 @@ function App() {
 
   // Progress by individual - using teammates and assigneeId names
   const individualProgress = useMemo(() => {
-    const byPerson: Record<string, { name: string; count: number; color: string }> = {};
+    const byPerson: Record<string, { id: string; name: string; count: number; color: string }> = {};
 
     // Add teammates
     teammates.forEach((t) => {
-      byPerson[t.name.toLowerCase()] = { name: t.name, count: 0, color: t.color };
+      byPerson[t.name.toLowerCase()] = { id: t.id, name: t.name, count: 0, color: t.color };
     });
 
     // Add admin user
-    byPerson[adminUser.name.toLowerCase()] = { name: adminUser.name, count: 0, color: adminUser.color };
+    byPerson[adminUser.name.toLowerCase()] = { id: adminUser.id, name: adminUser.name, count: 0, color: adminUser.color };
 
-    // Count completed reviews per person (by name match)
-    completedReviews.forEach((r) => {
+    // Count completed reviews per person (by name match) - use allCompletedReviews to show total counts
+    allCompletedReviews.forEach((r) => {
       if (r.assigneeId) {
         const assigneeLower = r.assigneeId.toLowerCase();
         if (byPerson[assigneeLower]) {
@@ -269,7 +276,7 @@ function App() {
     return Object.values(byPerson)
       .filter((p) => p.count > 0 || teammates.some((t) => t.name === p.name) || p.name === adminUser.name)
       .sort((a, b) => b.count - a.count);
-  }, [completedReviews, teammates]);
+  }, [allCompletedReviews, teammates]);
 
   const maxIndividualCount = Math.max(...individualProgress.map((p) => p.count), 1);
 
@@ -491,6 +498,30 @@ function App() {
         <div className="p-8">
           {currentView === 'dashboard' && (
             <div className="space-y-8">
+              {/* Teammate Filter Banner */}
+              {selectedTeammate && (
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                      style={{ backgroundColor: selectedTeammate.color }}
+                    >
+                      {selectedTeammate.name.split(' ').map((n) => n[0]).join('')}
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-900">{selectedTeammate.name}'s Dashboard</p>
+                      <p className="text-sm text-slate-500">Showing individual progress and stats</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedTeammateId(null)}
+                    className="px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 border border-slate-200 transition-colors"
+                  >
+                    View All
+                  </button>
+                </div>
+              )}
+
               {/* Stats Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatsCard
@@ -596,20 +627,40 @@ function App() {
 
               {/* Individual Progress */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <h3 className="font-semibold text-slate-900 mb-6 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-blue-500" />
-                  Progress by Individual
-                </h3>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-blue-500" />
+                    Progress by Individual
+                  </h3>
+                  {selectedTeammateId && (
+                    <button
+                      onClick={() => setSelectedTeammateId(null)}
+                      className="text-xs text-slate-500 hover:text-slate-700 underline"
+                    >
+                      Show All
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-4">
                   {individualProgress.map((person) => (
-                    <div key={person.name} className="flex items-center gap-4">
+                    <button
+                      key={person.name}
+                      onClick={() => setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id)}
+                      className={`w-full flex items-center gap-4 p-2 -m-2 rounded-lg transition-all ${
+                        selectedTeammateId === person.id
+                          ? 'bg-blue-50 ring-2 ring-blue-500'
+                          : 'hover:bg-slate-50'
+                      }`}
+                    >
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white shrink-0"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white shrink-0 ${
+                          selectedTeammateId === person.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                        }`}
                         style={{ backgroundColor: person.color }}
                       >
                         {person.name.split(' ').map((n) => n[0]).join('')}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-left">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium text-slate-900 truncate">{person.name}</span>
                           <span className="text-sm font-bold text-slate-900 ml-2">{person.count}</span>
@@ -624,7 +675,7 @@ function App() {
                           />
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
