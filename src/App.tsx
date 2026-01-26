@@ -661,7 +661,11 @@ function App() {
                   {individualProgress.map((person) => (
                     <button
                       key={person.name}
-                      onClick={() => setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id)}
+                      onClick={() => {
+                        console.log('Clicked:', person.name, 'ID:', person.id);
+                        alert(`Clicked: ${person.name}\nID: ${person.id}`);
+                        setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id);
+                      }}
                       className={`w-full flex items-center gap-4 p-2 -m-2 rounded-lg transition-all ${
                         selectedTeammateId === person.id
                           ? 'bg-blue-50 ring-2 ring-blue-500'
