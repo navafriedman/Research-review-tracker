@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Cloud, Download, Upload, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Cloud, Download, Upload, Check, AlertCircle, Loader2, FileJson } from 'lucide-react';
 import type { Review, User } from '../types';
 
 interface SettingsPanelProps {
@@ -16,6 +16,7 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
   const [isLoading, setIsLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(SHEETS_URL_KEY);
@@ -61,6 +62,66 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
     a.download = `team-export-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportJSON = () => {
+    const data = {
+      exportedAt: new Date().toISOString(),
+      reviews: reviews.map((r) => ({
+        title: r.title,
+        status: r.status,
+        completedAt: r.completedAt ? new Date(r.completedAt).toISOString().split('T')[0] : null,
+        assigneeId: r.assigneeId || null,
+        jurisdiction: r.jurisdiction || '',
+      })),
+      teammates: teammates.map((t) => ({
+        name: t.name,
+        email: t.email,
+        color: t.color,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `review-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onImportData) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        const importedReviews = (data.reviews || []).map((r: Record<string, string | null>) => ({
+          title: r.title || '',
+          status: r.status || 'pending',
+          completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+          assigneeId: r.assigneeId || undefined,
+          jurisdiction: r.jurisdiction || '',
+        }));
+        const importedTeammates = (data.teammates || []).map((t: Record<string, string>) => ({
+          name: t.name || '',
+          email: t.email || '',
+          color: t.color || 'blue',
+        }));
+        onImportData({ reviews: importedReviews, teammates: importedTeammates });
+        setSyncStatus('success');
+        setSyncMessage(`Imported ${importedReviews.length} reviews and ${importedTeammates.length} teammates`);
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      } catch {
+        setSyncStatus('error');
+        setSyncMessage('Failed to parse JSON file');
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      }
+    };
+    reader.readAsText(file);
+    // Reset the input so the same file can be selected again
+    event.target.value = '';
   };
 
   const handleSyncToSheets = async () => {
@@ -208,11 +269,45 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
         </div>
       </div>
 
+      {/* JSON Backup/Restore - Simple cross-session sync */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+          <FileJson className="w-5 h-5 text-orange-500" />
+          Backup & Restore
+        </h3>
+        <p className="text-sm text-slate-500 mb-4">
+          Export your data as a JSON file and import it in another browser or incognito mode.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={handleExportJSON}
+            className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Download Backup
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportJSON}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 bg-slate-600 text-white text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Restore from Backup
+          </button>
+        </div>
+      </div>
+
       {/* Google Sheets Sync */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
           <Cloud className="w-5 h-5 text-emerald-500" />
-          Google Sheets Sync
+          Google Sheets Sync (Advanced)
         </h3>
         <div className="space-y-4">
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
