@@ -71,7 +71,6 @@ function App() {
   const [reviews, setReviews] = useState<Review[]>(() => loadFromStorage(STORAGE_KEYS.reviews, []));
   const [currentUser, setCurrentUser] = useState<User>(adminUser);
   const [teammates, setTeammates] = useState<User[]>(() => loadFromStorage(STORAGE_KEYS.teammates, []));
-  const [selectedTeammateId, setSelectedTeammateId] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === 'admin';
 
@@ -213,17 +212,8 @@ function App() {
   const allUsers = [adminUser, ...teammates];
 
   // Calculate stats
-  const allCompletedReviews = reviews.filter((r) => r.status === 'reviewed');
-  const selectedTeammate = selectedTeammateId
-    ? teammates.find((t) => t.id === selectedTeammateId) || (selectedTeammateId === adminUser.id ? adminUser : null)
-    : null;
-  const completedReviews = selectedTeammate
-    ? allCompletedReviews.filter((r) => {
-        if (!r.assigneeId) return false;
-        return r.assigneeId.toLowerCase().trim() === selectedTeammate.name.toLowerCase().trim();
-      })
-    : allCompletedReviews;
-  const totalGoal = selectedTeammateId ? Math.round(352 / Math.max(teammates.length, 1)) : 352;
+  const completedReviews = reviews.filter((r) => r.status === 'reviewed');
+  const totalGoal = 352;
   const progressPercent = Math.round((completedReviews.length / totalGoal) * 100);
 
   // Daily progress for last 7 days
@@ -259,7 +249,7 @@ function App() {
     byPerson[adminUser.name.toLowerCase()] = { id: adminUser.id, name: adminUser.name, count: 0, color: adminUser.color };
 
     // Count completed reviews per person (by exact name match only)
-    allCompletedReviews.forEach((r) => {
+    completedReviews.forEach((r) => {
       if (r.assigneeId) {
         const assigneeLower = r.assigneeId.toLowerCase().trim();
         if (byPerson[assigneeLower]) {
@@ -271,7 +261,7 @@ function App() {
     return Object.values(byPerson)
       .filter((p) => p.count > 0 || teammates.some((t) => t.name === p.name) || p.name === adminUser.name)
       .sort((a, b) => b.count - a.count);
-  }, [allCompletedReviews, teammates]);
+  }, [completedReviews, teammates]);
 
   const maxIndividualCount = Math.max(...individualProgress.map((p) => p.count), 1);
 
@@ -493,39 +483,6 @@ function App() {
         <div className="p-8">
           {currentView === 'dashboard' && (
             <div className="space-y-8">
-              {/* Teammate Filter Banner */}
-              {selectedTeammate && (
-                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white"
-                      style={{ backgroundColor: selectedTeammate.color }}
-                    >
-                      {selectedTeammate.name.split(' ').map((n) => n[0]).join('')}
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-900">{selectedTeammate.name}'s Dashboard</p>
-                      <p className="text-sm text-slate-500">Showing {completedReviews.length} completed reviews</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setSelectedTeammateId(null)}
-                    className="px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 border border-slate-200 transition-colors"
-                  >
-                    View All
-                  </button>
-                </div>
-              )}
-
-              {/* Debug: Show selected ID */}
-              {selectedTeammateId && !selectedTeammate && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
-                  Debug: Selected ID "{selectedTeammateId}" but no matching teammate found.
-                  <br />
-                  Available teammate IDs: {teammates.map(t => t.id).join(', ') || 'none'}
-                </div>
-              )}
-
               {/* Stats Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatsCard
@@ -631,30 +588,15 @@ function App() {
 
               {/* Individual Progress */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-blue-500" />
-                    Progress by Individual
-                  </h3>
-                  {selectedTeammateId && (
-                    <button
-                      onClick={() => setSelectedTeammateId(null)}
-                      className="text-xs text-slate-500 hover:text-slate-700 underline"
-                    >
-                      Show All
-                    </button>
-                  )}
-                </div>
+                <h3 className="font-semibold text-slate-900 mb-6 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-blue-500" />
+                  Progress by Individual
+                </h3>
                 <div className="space-y-3">
                   {individualProgress.map((person) => (
                     <div
                       key={person.name}
-                      onClick={() => setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id)}
-                      className={`flex items-center gap-4 p-3 rounded-lg transition-all cursor-pointer ${
-                        selectedTeammateId === person.id
-                          ? 'bg-blue-100 ring-2 ring-blue-500'
-                          : 'bg-slate-50 hover:bg-slate-100'
-                      }`}
+                      className="flex items-center gap-4 p-3 rounded-lg bg-slate-50"
                     >
                       <div
                         className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white shrink-0"
