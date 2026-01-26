@@ -111,6 +111,63 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
     }
   };
 
+  const handleLoadFromJsonbin = async () => {
+    if (!jsonbinBinId) {
+      setSyncStatus('error');
+      setSyncMessage('Please enter a Bin ID to load from');
+      return;
+    }
+
+    if (!onImportData) {
+      setSyncStatus('error');
+      setSyncMessage('Import not available');
+      return;
+    }
+
+    setIsLoading(true);
+    setSyncStatus('idle');
+
+    try {
+      const response = await fetch(`https://api.jsonbin.io/v3/b/${jsonbinBinId}/latest`, {
+        headers: {
+          'X-Bin-Meta': 'false',
+        },
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json();
+
+      const importedReviews = (data.reviews || []).map((r: Record<string, string | null>) => ({
+        title: r.title || '',
+        status: r.status || 'pending',
+        completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+        assigneeId: r.assigneeId || undefined,
+        jurisdiction: r.jurisdiction || '',
+      }));
+
+      const importedTeammates = (data.teammates || []).map((t: Record<string, string>) => ({
+        name: t.name || '',
+        email: t.email || '',
+        color: t.color || 'blue',
+      }));
+
+      onImportData({ reviews: importedReviews, teammates: importedTeammates });
+
+      // Save the bin ID for future use
+      localStorage.setItem(JSONBIN_BIN_ID, jsonbinBinId);
+
+      setSyncStatus('success');
+      setSyncMessage(`Loaded ${importedReviews.length} reviews and ${importedTeammates.length} teammates from cloud`);
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage('Failed to load: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setSyncStatus('idle'), 5000);
+    }
+  };
+
   const handleSaveUrl = () => {
     localStorage.setItem(SHEETS_URL_KEY, sheetsUrl);
     setSyncStatus('success');
@@ -420,6 +477,20 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
                   <Upload className="w-4 h-4" />
                 )}
                 Publish to Cloud
+              </button>
+            )}
+            {jsonbinBinId && (
+              <button
+                onClick={handleLoadFromJsonbin}
+                disabled={isLoading}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                Load from Cloud
               </button>
             )}
           </div>
