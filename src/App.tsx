@@ -216,24 +216,75 @@ function App() {
     return days;
   }, [completedReviews]);
 
+  // Helper to normalize names for matching (handles OCR variations)
+  const normalizeName = (name: string): string => {
+    return name
+      .toLowerCase()
+      .replace(/[''`]/g, '') // Remove apostrophes and similar
+      .replace(/\s+/g, ' ')  // Normalize whitespace
+      .trim();
+  };
+
+  // Find best matching teammate name for a given assigneeId
+  const findMatchingTeammate = (assigneeId: string): string | null => {
+    const normalizedAssignee = normalizeName(assigneeId);
+
+    // Check admin first
+    if (normalizeName(adminUser.name) === normalizedAssignee) {
+      return adminUser.name;
+    }
+
+    // Check teammates
+    for (const t of teammates) {
+      if (normalizeName(t.name) === normalizedAssignee) {
+        return t.name;
+      }
+    }
+
+    // Try partial match (first and last name separately)
+    const assigneeParts = normalizedAssignee.split(' ').filter(Boolean);
+    if (assigneeParts.length >= 2) {
+      const firstName = assigneeParts[0];
+      const lastName = assigneeParts[assigneeParts.length - 1];
+
+      for (const t of teammates) {
+        const teammateParts = normalizeName(t.name).split(' ').filter(Boolean);
+        if (teammateParts.length >= 2) {
+          const tmFirstName = teammateParts[0];
+          const tmLastName = teammateParts[teammateParts.length - 1];
+
+          // Match if first and last names match (handles middle name differences)
+          if (firstName === tmFirstName && lastName === tmLastName) {
+            return t.name;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
   // Progress by individual - using teammates and assigneeId names
   const individualProgress = useMemo(() => {
     const byPerson: Record<string, { id: string; name: string; count: number; color: string }> = {};
 
-    // Add teammates
+    // Add teammates (keyed by normalized name)
     teammates.forEach((t) => {
-      byPerson[t.name.toLowerCase()] = { id: t.id, name: t.name, count: 0, color: t.color };
+      byPerson[normalizeName(t.name)] = { id: t.id, name: t.name, count: 0, color: t.color };
     });
 
     // Add admin user
-    byPerson[adminUser.name.toLowerCase()] = { id: adminUser.id, name: adminUser.name, count: 0, color: adminUser.color };
+    byPerson[normalizeName(adminUser.name)] = { id: adminUser.id, name: adminUser.name, count: 0, color: adminUser.color };
 
-    // Count completed reviews per person (by exact name match only)
+    // Count completed reviews per person (using flexible matching)
     completedReviews.forEach((r) => {
       if (r.assigneeId) {
-        const assigneeLower = r.assigneeId.toLowerCase().trim();
-        if (byPerson[assigneeLower]) {
-          byPerson[assigneeLower].count++;
+        const matchedName = findMatchingTeammate(r.assigneeId);
+        if (matchedName) {
+          const key = normalizeName(matchedName);
+          if (byPerson[key]) {
+            byPerson[key].count++;
+          }
         }
       }
     });
