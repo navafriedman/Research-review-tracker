@@ -215,10 +215,17 @@ function App() {
   // Calculate stats
   const allCompletedReviews = reviews.filter((r) => r.status === 'reviewed');
   const selectedTeammate = selectedTeammateId
-    ? teammates.find((t) => t.id === selectedTeammateId)
+    ? teammates.find((t) => t.id === selectedTeammateId) || (selectedTeammateId === adminUser.id ? adminUser : null)
     : null;
-  const completedReviews = selectedTeammateId
-    ? allCompletedReviews.filter((r) => r.assigneeId === selectedTeammateId)
+  const completedReviews = selectedTeammate
+    ? allCompletedReviews.filter((r) => {
+        if (!r.assigneeId) return false;
+        const assigneeLower = r.assigneeId.toLowerCase();
+        const selectedNameLower = selectedTeammate.name.toLowerCase();
+        return assigneeLower === selectedNameLower ||
+               assigneeLower.includes(selectedNameLower) ||
+               selectedNameLower.includes(assigneeLower);
+      })
     : allCompletedReviews;
   const totalGoal = selectedTeammateId ? Math.round(352 / Math.max(teammates.length, 1)) : 352;
   const progressPercent = Math.round((completedReviews.length / totalGoal) * 100);
