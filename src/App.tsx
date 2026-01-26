@@ -220,11 +220,7 @@ function App() {
   const completedReviews = selectedTeammate
     ? allCompletedReviews.filter((r) => {
         if (!r.assigneeId) return false;
-        const assigneeLower = r.assigneeId.toLowerCase();
-        const selectedNameLower = selectedTeammate.name.toLowerCase();
-        return assigneeLower === selectedNameLower ||
-               assigneeLower.includes(selectedNameLower) ||
-               selectedNameLower.includes(assigneeLower);
+        return r.assigneeId.toLowerCase().trim() === selectedTeammate.name.toLowerCase().trim();
       })
     : allCompletedReviews;
   const totalGoal = selectedTeammateId ? Math.round(352 / Math.max(teammates.length, 1)) : 352;
@@ -262,20 +258,12 @@ function App() {
     // Add admin user
     byPerson[adminUser.name.toLowerCase()] = { id: adminUser.id, name: adminUser.name, count: 0, color: adminUser.color };
 
-    // Count completed reviews per person (by name match) - use allCompletedReviews to show total counts
+    // Count completed reviews per person (by exact name match only)
     allCompletedReviews.forEach((r) => {
       if (r.assigneeId) {
-        const assigneeLower = r.assigneeId.toLowerCase();
+        const assigneeLower = r.assigneeId.toLowerCase().trim();
         if (byPerson[assigneeLower]) {
           byPerson[assigneeLower].count++;
-        } else {
-          // Check if any teammate name matches partially
-          const matchingKey = Object.keys(byPerson).find(
-            (key) => assigneeLower.includes(key) || key.includes(assigneeLower)
-          );
-          if (matchingKey) {
-            byPerson[matchingKey].count++;
-          }
         }
       }
     });
@@ -657,14 +645,15 @@ function App() {
                     </button>
                   )}
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {individualProgress.map((person) => (
                     <div
                       key={person.name}
-                      className={`flex items-center gap-4 p-3 rounded-lg transition-all ${
+                      onClick={() => setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id)}
+                      className={`flex items-center gap-4 p-3 rounded-lg transition-all cursor-pointer ${
                         selectedTeammateId === person.id
-                          ? 'bg-blue-50 ring-2 ring-blue-500'
-                          : 'bg-slate-50'
+                          ? 'bg-blue-100 ring-2 ring-blue-500'
+                          : 'bg-slate-50 hover:bg-slate-100'
                       }`}
                     >
                       <div
@@ -676,19 +665,7 @@ function App() {
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium text-slate-900 truncate">{person.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-slate-900">{person.count}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                console.log('View clicked:', person.name);
-                                setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id);
-                              }}
-                              className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
-                            >
-                              {selectedTeammateId === person.id ? 'Clear' : 'View'}
-                            </button>
-                          </div>
+                          <span className="text-sm font-bold text-slate-900">{person.count}</span>
                         </div>
                         <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                           <div
