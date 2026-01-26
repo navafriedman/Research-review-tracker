@@ -76,12 +76,16 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
           headers: {
             'Content-Type': 'application/json',
             'X-Master-Key': jsonbinApiKey,
+            'X-Bin-Private': 'false', // Ensure bin stays public for sharing
           },
           body: JSON.stringify(data),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        // Generate the shareable URL
+        const shareableUrl = `${window.location.origin}?bin=${jsonbinBinId}`;
         setSyncStatus('success');
-        setSyncMessage('Data published! Share this Bin ID with your team: ' + jsonbinBinId);
+        setSyncMessage('Data published!');
       } else {
         // Create new bin
         const response = await fetch('https://api.jsonbin.io/v3/b', {
@@ -497,12 +501,28 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
 
           {jsonbinBinId && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <p className="text-sm text-emerald-800">
+              <p className="text-sm text-emerald-800 mb-2">
                 <strong>Share this link with your team:</strong>
               </p>
-              <code className="text-xs text-emerald-700 break-all">
-                {window.location.origin}?bin={jsonbinBinId}
-              </code>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs text-emerald-700 break-all bg-white px-2 py-1 rounded border border-emerald-200">
+                  {window.location.origin}?bin={jsonbinBinId}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}?bin=${jsonbinBinId}`);
+                    setSyncStatus('success');
+                    setSyncMessage('Link copied to clipboard!');
+                    setTimeout(() => setSyncStatus('idle'), 2000);
+                  }}
+                  className="px-3 py-1 bg-emerald-600 text-white text-xs font-medium rounded hover:bg-emerald-700 transition-colors whitespace-nowrap"
+                >
+                  Copy Link
+                </button>
+              </div>
+              <p className="text-xs text-emerald-600 mt-2">
+                Others can view the dashboard (read-only) by opening this link.
+              </p>
             </div>
           )}
         </div>
