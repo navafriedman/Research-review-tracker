@@ -74,14 +74,67 @@ function App() {
 
   const isAdmin = currentUser.role === 'admin';
 
-  // Save to localStorage when data changes
+  const [isCloudLoading, setIsCloudLoading] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [isReadOnlyMode, setIsReadOnlyMode] = useState(false);
+
+  // Save to localStorage when data changes (only if not in read-only mode)
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.reviews, reviews);
-  }, [reviews]);
+    if (!isReadOnlyMode) {
+      saveToStorage(STORAGE_KEYS.reviews, reviews);
+    }
+  }, [reviews, isReadOnlyMode]);
 
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.teammates, teammates);
-  }, [teammates]);
+    if (!isReadOnlyMode) {
+      saveToStorage(STORAGE_KEYS.teammates, teammates);
+    }
+  }, [teammates, isReadOnlyMode]);
+
+  // Load from JSONBin if ?bin= parameter is present
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const binId = params.get('bin');
+    if (binId) {
+      setIsCloudLoading(true);
+      setIsReadOnlyMode(true);
+      fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+        headers: {
+          'X-Bin-Meta': 'false',
+        },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((data) => {
+          const loadedReviews = (data.reviews || []).map((r: Record<string, string | null>, i: number) => ({
+            id: `cloud-${i}`,
+            title: r.title || '',
+            status: r.status || 'pending',
+            completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+            assigneeId: r.assigneeId || undefined,
+            jurisdiction: r.jurisdiction || '',
+          }));
+          const loadedTeammates = (data.teammates || []).map((t: Record<string, string>, i: number) => ({
+            id: `teammate-${i}`,
+            name: t.name || '',
+            email: t.email || '',
+            color: t.color || 'blue',
+            role: 'viewer' as const,
+          }));
+          setReviews(loadedReviews);
+          setTeammates(loadedTeammates);
+          setCloudError(null);
+        })
+        .catch((err) => {
+          setCloudError('Failed to load shared data: ' + err.message);
+        })
+        .finally(() => {
+          setIsCloudLoading(false);
+        });
+    }
+  }, []);
 
   // Helper to generate user from name
   const createUserFromName = (name: string): User => {
@@ -378,10 +431,37 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-1 ml-64 overflow-auto">
+        {/* Cloud Loading Overlay */}
+        {isCloudLoading && (
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="text-center">
+              <Cloud className="w-12 h-12 text-indigo-500 animate-pulse mx-auto mb-4" />
+              <p className="text-lg font-medium text-slate-700">Loading shared data...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Cloud Error */}
+        {cloudError && (
+          <div className="bg-red-50 border-b border-red-200 px-8 py-3">
+            <p className="text-sm text-red-700">{cloudError}</p>
+          </div>
+        )}
+
+        {/* Read-only Mode Banner */}
+        {isReadOnlyMode && !isCloudLoading && (
+          <div className="bg-indigo-50 border-b border-indigo-200 px-8 py-3 flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-indigo-600" />
+            <p className="text-sm text-indigo-700">
+              <strong>Viewing shared data</strong> — This is a read-only view. Changes won't be saved.
+            </p>
+          </div>
+        )}
+
         {/* Header */}
         <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200">
           <div className="px-8 py-4">
-            <h2 className="text-2xl font-bold text-slate-900">
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
               {currentView === 'dashboard'
                 ? 'Q1 Candidate Review Tracker'
                 : currentView === 'admin'
@@ -389,6 +469,11 @@ function App() {
                 : currentView === 'settings'
                 ? 'Sync & Export'
                 : 'Log Review'}
+              {isReadOnlyMode && (
+                <span className="text-xs font-medium bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">
+                  SHARED VIEW
+                </span>
+              )}
             </h2>
             <p className="text-sm text-slate-500">
               {currentView === 'dashboard'

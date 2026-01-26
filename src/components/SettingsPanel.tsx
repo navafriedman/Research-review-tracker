@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Cloud, Download, Upload, Check, AlertCircle, Loader2, FileJson } from 'lucide-react';
+import { Cloud, Download, Upload, Check, AlertCircle, Loader2, FileJson, Globe } from 'lucide-react';
 import type { Review, User } from '../types';
 
 interface SettingsPanelProps {
@@ -9,6 +9,8 @@ interface SettingsPanelProps {
 }
 
 const SHEETS_URL_KEY = 'review-tracker-sheets-url';
+const JSONBIN_API_KEY = 'review-tracker-jsonbin-api-key';
+const JSONBIN_BIN_ID = 'review-tracker-jsonbin-bin-id';
 
 export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPanelProps) {
   const [sheetsUrl, setSheetsUrl] = useState('');
@@ -18,10 +20,96 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
   const [syncMessage, setSyncMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // JSONBin state
+  const [jsonbinApiKey, setJsonbinApiKey] = useState('');
+  const [jsonbinBinId, setJsonbinBinId] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
+
   useEffect(() => {
     const stored = localStorage.getItem(SHEETS_URL_KEY);
     if (stored) setSheetsUrl(stored);
+    const storedApiKey = localStorage.getItem(JSONBIN_API_KEY);
+    if (storedApiKey) setJsonbinApiKey(storedApiKey);
+    const storedBinId = localStorage.getItem(JSONBIN_BIN_ID);
+    if (storedBinId) setJsonbinBinId(storedBinId);
   }, []);
+
+  const handleSaveJsonbinConfig = () => {
+    localStorage.setItem(JSONBIN_API_KEY, jsonbinApiKey);
+    localStorage.setItem(JSONBIN_BIN_ID, jsonbinBinId);
+    setSyncStatus('success');
+    setSyncMessage('JSONBin config saved');
+    setTimeout(() => setSyncStatus('idle'), 2000);
+  };
+
+  const handlePublishToJsonbin = async () => {
+    if (!jsonbinApiKey) {
+      setSyncStatus('error');
+      setSyncMessage('Please enter your JSONBin API key');
+      return;
+    }
+
+    setIsPublishing(true);
+    setSyncStatus('idle');
+
+    const data = {
+      publishedAt: new Date().toISOString(),
+      reviews: reviews.map((r) => ({
+        title: r.title,
+        status: r.status,
+        completedAt: r.completedAt ? new Date(r.completedAt).toISOString().split('T')[0] : null,
+        assigneeId: r.assigneeId || null,
+        jurisdiction: r.jurisdiction || '',
+      })),
+      teammates: teammates.map((t) => ({
+        name: t.name,
+        email: t.email,
+        color: t.color,
+      })),
+    };
+
+    try {
+      if (jsonbinBinId) {
+        // Update existing bin
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${jsonbinBinId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': jsonbinApiKey,
+          },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setSyncStatus('success');
+        setSyncMessage('Data published! Share this Bin ID with your team: ' + jsonbinBinId);
+      } else {
+        // Create new bin
+        const response = await fetch('https://api.jsonbin.io/v3/b', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': jsonbinApiKey,
+            'X-Bin-Name': 'review-tracker-data',
+            'X-Bin-Private': 'false',
+          },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+        const newBinId = result.metadata.id;
+        setJsonbinBinId(newBinId);
+        localStorage.setItem(JSONBIN_BIN_ID, newBinId);
+        setSyncStatus('success');
+        setSyncMessage('Created new bin! Share this Bin ID: ' + newBinId);
+      }
+    } catch (error) {
+      setSyncStatus('error');
+      setSyncMessage('Failed to publish: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsPublishing(false);
+      setTimeout(() => setSyncStatus('idle'), 5000);
+    }
+  };
 
   const handleSaveUrl = () => {
     localStorage.setItem(SHEETS_URL_KEY, sheetsUrl);
@@ -269,11 +357,91 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
         </div>
       </div>
 
+      {/* JSONBin Cloud Sync - Shared view for team */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+          <Globe className="w-5 h-5 text-indigo-500" />
+          Cloud Sync (Share with Team)
+        </h3>
+        <div className="space-y-4">
+          <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+            <p className="text-sm text-indigo-800 mb-2 font-medium">Quick Setup (Free):</p>
+            <ol className="text-sm text-indigo-700 space-y-1 list-decimal list-inside">
+              <li>Go to <a href="https://jsonbin.io" target="_blank" rel="noopener noreferrer" className="underline">jsonbin.io</a> and create a free account</li>
+              <li>Copy your API Key from the dashboard</li>
+              <li>Paste it below and click "Publish"</li>
+              <li>Share the Bin ID with your team - they enter it to see your data</li>
+            </ol>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                API Key (Admin only - keep private)
+              </label>
+              <input
+                type="password"
+                value={jsonbinApiKey}
+                onChange={(e) => setJsonbinApiKey(e.target.value)}
+                placeholder="$2a$10$..."
+                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Bin ID (Share this with your team)
+              </label>
+              <input
+                type="text"
+                value={jsonbinBinId}
+                onChange={(e) => setJsonbinBinId(e.target.value)}
+                placeholder="Enter existing Bin ID or leave empty to create new"
+                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleSaveJsonbinConfig}
+              className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors"
+            >
+              Save Config
+            </button>
+            {jsonbinApiKey && (
+              <button
+                onClick={handlePublishToJsonbin}
+                disabled={isPublishing}
+                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {isPublishing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+                Publish to Cloud
+              </button>
+            )}
+          </div>
+
+          {jsonbinBinId && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <p className="text-sm text-emerald-800">
+                <strong>Share this link with your team:</strong>
+              </p>
+              <code className="text-xs text-emerald-700 break-all">
+                {window.location.origin}?bin={jsonbinBinId}
+              </code>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* JSON Backup/Restore - Simple cross-session sync */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
           <FileJson className="w-5 h-5 text-orange-500" />
-          Backup & Restore
+          Backup & Restore (Local)
         </h3>
         <p className="text-sm text-slate-500 mb-4">
           Export your data as a JSON file and import it in another browser or incognito mode.
