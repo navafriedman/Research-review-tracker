@@ -517,7 +517,7 @@ function App() {
                     </div>
                     <div>
                       <p className="font-medium text-slate-900">{selectedTeammate.name}'s Dashboard</p>
-                      <p className="text-sm text-slate-500">Showing individual progress and stats</p>
+                      <p className="text-sm text-slate-500">Showing {completedReviews.length} completed reviews</p>
                     </div>
                   </div>
                   <button
@@ -526,6 +526,15 @@ function App() {
                   >
                     View All
                   </button>
+                </div>
+              )}
+
+              {/* Debug: Show selected ID */}
+              {selectedTeammateId && !selectedTeammate && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
+                  Debug: Selected ID "{selectedTeammateId}" but no matching teammate found.
+                  <br />
+                  Available teammate IDs: {teammates.map(t => t.id).join(', ') || 'none'}
                 </div>
               )}
 
