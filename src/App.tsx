@@ -659,33 +659,38 @@ function App() {
                 </div>
                 <div className="space-y-4">
                   {individualProgress.map((person) => (
-                    <button
+                    <div
                       key={person.name}
-                      onClick={() => {
-                        console.log('Clicked:', person.name, 'ID:', person.id);
-                        alert(`Clicked: ${person.name}\nID: ${person.id}`);
-                        setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id);
-                      }}
-                      className={`w-full flex items-center gap-4 p-2 -m-2 rounded-lg transition-all ${
+                      className={`flex items-center gap-4 p-3 rounded-lg transition-all ${
                         selectedTeammateId === person.id
                           ? 'bg-blue-50 ring-2 ring-blue-500'
-                          : 'hover:bg-slate-50'
+                          : 'bg-slate-50'
                       }`}
                     >
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white shrink-0 ${
-                          selectedTeammateId === person.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''
-                        }`}
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white shrink-0"
                         style={{ backgroundColor: person.color }}
                       >
                         {person.name.split(' ').map((n) => n[0]).join('')}
                       </div>
-                      <div className="flex-1 min-w-0 text-left">
+                      <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1">
                           <span className="font-medium text-slate-900 truncate">{person.name}</span>
-                          <span className="text-sm font-bold text-slate-900 ml-2">{person.count}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-900">{person.count}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                console.log('View clicked:', person.name);
+                                setSelectedTeammateId(selectedTeammateId === person.id ? null : person.id);
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                            >
+                              {selectedTeammateId === person.id ? 'Clear' : 'View'}
+                            </button>
+                          </div>
                         </div>
-                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{
@@ -695,7 +700,7 @@ function App() {
                           />
                         </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
