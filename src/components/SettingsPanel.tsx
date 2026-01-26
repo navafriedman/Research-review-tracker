@@ -129,12 +129,16 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
     setSyncStatus('idle');
 
     try {
-      // Use the URL with ?action=load to get data
-      const loadUrl = sheetsUrl.includes('?')
-        ? `${sheetsUrl}&action=load`
-        : `${sheetsUrl}?action=load`;
+      // Google Apps Script uses doGet for GET requests - no action parameter needed
+      const response = await fetch(sheetsUrl, {
+        method: 'GET',
+        redirect: 'follow',
+      });
 
-      const response = await fetch(loadUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.error) {
@@ -161,7 +165,13 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
       setSyncMessage(`Loaded ${importedReviews.length} reviews and ${importedTeammates.length} teammates`);
     } catch (error) {
       setSyncStatus('error');
-      setSyncMessage('Failed to load data. Make sure the script is deployed correctly.');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      // CORS errors show as "Failed to fetch" - provide helpful message
+      if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+        setSyncMessage('CORS error. Redeploy script with "Anyone" access and try again.');
+      } else {
+        setSyncMessage(`Failed to load: ${errorMsg}`);
+      }
       console.error('Load error:', error);
     } finally {
       setIsLoading(false);
