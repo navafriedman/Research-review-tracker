@@ -81,9 +81,6 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
           body: JSON.stringify(data),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        // Generate the shareable URL
-        const shareableUrl = `${window.location.origin}?bin=${jsonbinBinId}`;
         setSyncStatus('success');
         setSyncMessage('Data published!');
       } else {

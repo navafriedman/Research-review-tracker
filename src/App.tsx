@@ -7,15 +7,13 @@ import {
   Clock,
   TrendingUp,
   Users,
-  ClipboardList,
-  LogOut,
   Cloud,
 } from 'lucide-react';
-import { StatsCard, ProgressRing, AdminPanel, TeammatePanel, SettingsPanel } from './components';
+import { StatsCard, ProgressRing, AdminPanel, SettingsPanel } from './components';
 import type { Review, User } from './types';
 import { format, subDays, startOfDay } from 'date-fns';
 
-type View = 'dashboard' | 'admin' | 'log-review' | 'settings';
+type View = 'dashboard' | 'admin' | 'settings';
 
 // Default admin user
 const adminUser: User = {
@@ -69,10 +67,7 @@ const saveToStorage = <T,>(key: string, data: T): void => {
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [reviews, setReviews] = useState<Review[]>(() => loadFromStorage(STORAGE_KEYS.reviews, []));
-  const [currentUser, setCurrentUser] = useState<User>(adminUser);
   const [teammates, setTeammates] = useState<User[]>(() => loadFromStorage(STORAGE_KEYS.teammates, []));
-
-  const isAdmin = currentUser.role === 'admin';
 
   const [isCloudLoading, setIsCloudLoading] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -196,21 +191,6 @@ function App() {
     setTeammates((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Handle user switching (for demo/testing)
-  const handleSwitchUser = (user: User) => {
-    setCurrentUser(user);
-    // Reset to dashboard when switching users
-    setCurrentView('dashboard');
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(adminUser);
-    setCurrentView('dashboard');
-  };
-
-  // Get all users (admin + teammates) for user switcher
-  const allUsers = [adminUser, ...teammates];
-
   // Calculate stats
   const completedReviews = reviews.filter((r) => r.status === 'reviewed');
   const totalGoal = 352;
@@ -314,17 +294,12 @@ function App() {
     );
   };
 
-  // Navigation - different items based on role
-  const navItems = isAdmin
-    ? [
-        { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
-        { id: 'admin' as View, icon: Settings, label: 'Admin' },
-        { id: 'settings' as View, icon: Cloud, label: 'Sync & Export' },
-      ]
-    : [
-        { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
-        { id: 'log-review' as View, icon: ClipboardList, label: 'Log Review' },
-      ];
+  // Navigation items
+  const navItems = [
+    { id: 'dashboard' as View, icon: LayoutDashboard, label: 'Dashboard' },
+    { id: 'admin' as View, icon: Settings, label: 'Admin' },
+    { id: 'settings' as View, icon: Cloud, label: 'Sync & Export' },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -368,56 +343,22 @@ function App() {
           </ul>
         </nav>
 
-        {/* User Switcher */}
+        {/* Admin User Display */}
         <div className="p-4 border-t border-slate-100">
-          {/* Current User */}
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium"
-              style={{ backgroundColor: currentUser.color }}
+              style={{ backgroundColor: adminUser.color }}
             >
-              {currentUser.initials}
+              {adminUser.initials}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">
-                {currentUser.name}
+                {adminUser.name}
               </p>
-              <p className="text-xs text-slate-500">{isAdmin ? 'Admin' : 'Team Member'}</p>
+              <p className="text-xs text-slate-500">Admin</p>
             </div>
           </div>
-
-          {/* User Switcher (when teammates exist) */}
-          {teammates.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Switch User</p>
-              {allUsers.map((user) => (
-                user.id !== currentUser.id && (
-                  <button
-                    key={user.id}
-                    onClick={() => handleSwitchUser(user)}
-                    className="w-full flex items-center gap-2 p-2 text-left text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
-                  >
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-white font-medium"
-                      style={{ backgroundColor: user.color }}
-                    >
-                      {user.initials}
-                    </div>
-                    <span className="truncate">{user.name}</span>
-                  </button>
-                )
-              ))}
-              {!isAdmin && (
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2 p-2 text-left text-sm text-slate-500 hover:bg-slate-50 rounded-lg transition-colors mt-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Back to Admin</span>
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </aside>
 
@@ -458,9 +399,7 @@ function App() {
                 ? 'Q1 Candidate Review Tracker'
                 : currentView === 'admin'
                 ? 'Admin Panel'
-                : currentView === 'settings'
-                ? 'Sync & Export'
-                : 'Log Review'}
+                : 'Sync & Export'}
               {isReadOnlyMode && (
                 <span className="text-xs font-medium bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">
                   SHARED VIEW
@@ -472,9 +411,7 @@ function App() {
                 ? 'Track review progress across the team'
                 : currentView === 'admin'
                 ? 'Manage team and review data'
-                : currentView === 'settings'
-                ? 'Export data and sync with Google Sheets'
-                : 'Log your completed reviews'}
+                : 'Export data and sync with cloud'}
             </p>
           </div>
         </header>
@@ -626,7 +563,7 @@ function App() {
             </div>
           )}
 
-          {currentView === 'admin' && isAdmin && (
+          {currentView === 'admin' && (
             <AdminPanel
               reviews={reviews}
               teammates={teammates}
@@ -640,15 +577,7 @@ function App() {
             />
           )}
 
-          {currentView === 'log-review' && !isAdmin && (
-            <TeammatePanel
-              reviews={reviews}
-              currentUser={currentUser}
-              onAddReview={handleAddReview}
-            />
-          )}
-
-          {currentView === 'settings' && isAdmin && (
+          {currentView === 'settings' && (
             <SettingsPanel
               reviews={reviews}
               teammates={teammates}
