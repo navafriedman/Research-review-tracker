@@ -29,6 +29,8 @@ const adminUser: User = {
 const STORAGE_KEYS = {
   reviews: 'review-tracker-reviews',
   teammates: 'review-tracker-teammates',
+  jsonbinApiKey: 'review-tracker-jsonbin-api-key',
+  jsonbinBinId: 'review-tracker-jsonbin-bin-id',
 };
 
 // Load data from localStorage
@@ -85,6 +87,53 @@ function App() {
       saveToStorage(STORAGE_KEYS.teammates, teammates);
     }
   }, [teammates, isReadOnlyMode]);
+
+  // Auto-sync to JSONBin when data changes (debounced)
+  useEffect(() => {
+    if (isReadOnlyMode) return; // Don't sync in read-only mode
+
+    const apiKey = localStorage.getItem(STORAGE_KEYS.jsonbinApiKey);
+    const binId = localStorage.getItem(STORAGE_KEYS.jsonbinBinId);
+
+    if (!apiKey || !binId) return; // Not configured yet
+
+    // Debounce: wait 2 seconds after last change before syncing
+    const timeoutId = setTimeout(async () => {
+      try {
+        const data = {
+          publishedAt: new Date().toISOString(),
+          reviews: reviews.map((r) => ({
+            title: r.title,
+            status: r.status,
+            completedAt: r.completedAt ? new Date(r.completedAt).toISOString().split('T')[0] : null,
+            assigneeId: r.assigneeId || null,
+            jurisdiction: r.jurisdiction || '',
+          })),
+          teammates: teammates.map((t) => ({
+            name: t.name,
+            email: t.email,
+            color: t.color,
+          })),
+        };
+
+        await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': apiKey,
+            'X-Bin-Private': 'false',
+          },
+          body: JSON.stringify(data),
+        });
+
+        console.log('Auto-synced to cloud');
+      } catch (error) {
+        console.error('Auto-sync failed:', error);
+      }
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
+  }, [reviews, teammates, isReadOnlyMode]);
 
   // Load from JSONBin if ?bin= parameter is present
   useEffect(() => {
