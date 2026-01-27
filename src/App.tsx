@@ -269,8 +269,11 @@ function App() {
   const normalizeName = (name: string): string => {
     return name
       .toLowerCase()
-      .replace(/[''`]/g, '') // Remove apostrophes and similar
-      .replace(/\s+/g, ' ')  // Normalize whitespace
+      .replace(/[''`´'ʼ]/g, '')      // Remove all apostrophe variants
+      .replace(/[""„"«»]/g, '')      // Remove quote variants
+      .replace(/[\u2018\u2019\u201B\u2032\u2035]/g, '') // Unicode apostrophes
+      .replace(/\s+/g, ' ')          // Normalize whitespace
+      .replace(/[^\w\s]/g, '')       // Remove any remaining special chars
       .trim();
   };
 
@@ -283,7 +286,7 @@ function App() {
       return adminUser.name;
     }
 
-    // Check teammates
+    // Check teammates - exact normalized match
     for (const t of teammates) {
       if (normalizeName(t.name) === normalizedAssignee) {
         return t.name;
@@ -307,6 +310,20 @@ function App() {
             return t.name;
           }
         }
+      }
+    }
+
+    // Try contains match for partial OCR results (e.g., "Christina O" matches "Christina O'Reilly")
+    for (const t of teammates) {
+      const normalizedTeammate = normalizeName(t.name);
+      // Check if one contains the other (for partial matches)
+      if (normalizedTeammate.includes(normalizedAssignee) ||
+          normalizedAssignee.includes(normalizedTeammate)) {
+        return t.name;
+      }
+      // Check if first name + start of last name matches
+      if (normalizedAssignee.length >= 5 && normalizedTeammate.startsWith(normalizedAssignee)) {
+        return t.name;
       }
     }
 
