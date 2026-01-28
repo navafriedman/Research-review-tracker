@@ -298,18 +298,21 @@ export function AdminPanel({
 
   const handleImportConfirm = () => {
     if (csvPreview && selectedForImport.size > 0) {
-      // Apply the selected completion date to selected reviews only (parse as local time)
-      const reviewDate = new Date(completionDate + 'T00:00:00');
-      const reviewsWithDate = csvPreview
-        .filter((_, i) => selectedForImport.has(i))
-        .map((r) => ({
+      let reviewsToImport = csvPreview.filter((_, i) => selectedForImport.has(i));
+
+      // For image uploads, apply the completion date (images don't have dates)
+      if (imagePreview) {
+        const reviewDate = new Date(completionDate + 'T00:00:00');
+        reviewsToImport = reviewsToImport.map((r) => ({
           ...r,
           createdAt: reviewDate,
           updatedAt: reviewDate,
           completedAt: reviewDate,
           status: 'reviewed' as const,
         }));
-      onImportCSV(reviewsWithDate);
+      }
+
+      onImportCSV(reviewsToImport);
       setCsvPreview(null);
       setImagePreview(null);
       setSelectedForImport(new Set());
@@ -829,16 +832,18 @@ export function AdminPanel({
               </button>
             </div>
 
-            {/* Editable Completion Date */}
-            <div className="mb-3 flex items-center gap-3">
-              <label className="text-sm font-medium text-blue-800">Completion Date:</label>
-              <input
-                type="date"
-                value={completionDate}
-                onChange={(e) => setCompletionDate(e.target.value)}
-                className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white"
-              />
-            </div>
+            {/* Completion Date - only for image uploads (CSVs have their own dates) */}
+            {imagePreview && (
+              <div className="mb-3 flex items-center gap-3">
+                <label className="text-sm font-medium text-blue-800">Completion Date:</label>
+                <input
+                  type="date"
+                  value={completionDate}
+                  onChange={(e) => setCompletionDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white"
+                />
+              </div>
+            )}
 
             {/* Bulk Selection Actions */}
             <div className="mb-3 flex flex-wrap gap-2">
