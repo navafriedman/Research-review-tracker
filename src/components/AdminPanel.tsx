@@ -217,29 +217,76 @@ export function AdminPanel({
 
   const parseCSV = (text: string): Omit<Review, 'id'>[] => {
     const lines = text.trim().split('\n');
-    const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/['"]/g, ''));
+
+    // Helper to extract name from email (e.g., "carmel.alshaibi@change.org" → "Carmel Alshaibi")
+    const emailToName = (email: string): string => {
+      if (!email || !email.includes('@')) return email;
+      const localPart = email.split('@')[0];
+      // Handle formats like "first.last" or "first_last"
+      const parts = localPart.split(/[._]/).filter(Boolean);
+      return parts
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+    };
 
     return lines.slice(1).filter(line => line.trim()).map(line => {
-      const values = line.split(',').map(v => v.trim());
+      // Handle CSV parsing with quoted values
+      const values: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (const char of line) {
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim());
+
       const row: Record<string, string> = {};
       headers.forEach((h, i) => {
-        row[h] = values[i] || '';
+        row[h] = (values[i] || '').replace(/^["']|["']$/g, '');
       });
 
       // Parse date from various possible column names
-      const dateStr = row.date || row.completed || row.completed_at || row.completeddate;
-      const parsedDate = dateStr ? new Date(dateStr) : new Date();
+      const dateStr = row.reviewed_on || row.date || row.completed || row.completed_at || row.completeddate;
+      const createdStr = row.created_at || row.created || dateStr;
+
+      // Parse dates (handle ISO format)
+      const parsedDate = dateStr ? new Date(dateStr) : undefined;
+      const createdDate = createdStr ? new Date(createdStr) : new Date();
+
+      // Build title from entity_name + entity_type, or fall back to other fields
+      const entityName = row.entity_name || row.name || row.title || '';
+      const entityType = row.entity_type || '';
+      const title = entityName
+        ? (entityType ? `${entityName} ${entityType}` : entityName)
+        : (row.title || row.review || 'Untitled Review');
+
+      // Get assignee - prefer assigned_to (email), convert to name
+      let assignee = row.assigned_to || row.assignee || row.reviewer || row.assigneeid || '';
+      if (assignee.includes('@')) {
+        assignee = emailToName(assignee);
+      }
+
+      // Determine status - if reviewed_on exists, it's reviewed
+      const hasReviewDate = !!dateStr && dateStr.trim() !== '';
+      const status = row.status || (hasReviewDate ? 'reviewed' : 'needs_review');
 
       return {
-        title: row.title || row.review || row.name || 'Untitled Review',
+        title,
         description: row.description || '',
         type: (row.type as Review['type']) || 'deep_research_race',
         category: (row.category as Review['category']) || 'full_review',
-        status: (row.status as Review['status']) || 'reviewed',
+        status: status as Review['status'],
         priority: (row.priority as Review['priority']) || 'medium',
-        assigneeId: row.assignee || row.reviewer || row.assigneeid || undefined,
-        createdAt: parsedDate,
-        updatedAt: parsedDate,
+        assigneeId: assignee || undefined,
+        createdAt: createdDate,
+        updatedAt: createdDate,
         completedAt: parsedDate,
         estimatedMinutes: 60,
         actualMinutes: 60,
