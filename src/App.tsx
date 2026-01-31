@@ -75,6 +75,10 @@ function App() {
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [isReadOnlyMode, setIsReadOnlyMode] = useState(false);
 
+  // Daily progress chart state
+  const [progressDaysRange, setProgressDaysRange] = useState<7 | 14 | 30 | 'all'>(7);
+  const [selectedDayDetails, setSelectedDayDetails] = useState<{ date: string; reviews: Review[] } | null>(null);
+
   // Save to localStorage when data changes (only if not in read-only mode)
   useEffect(() => {
     if (!isReadOnlyMode) {
@@ -245,25 +249,42 @@ function App() {
   const totalGoal = 352;
   const progressPercent = Math.round((completedReviews.length / totalGoal) * 100);
 
-  // Daily progress for last 7 days
+  // Daily progress for selected date range
   const dailyProgress = useMemo(() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
+    const days: { label: string; date: string; fullDate: string; count: number; reviews: Review[] }[] = [];
+
+    // Determine number of days to show
+    let numDays: number;
+    if (progressDaysRange === 'all') {
+      // Find the earliest completed review date
+      const earliestDate = completedReviews.reduce((earliest, r) => {
+        if (!r.completedAt) return earliest;
+        const completed = new Date(r.completedAt);
+        return completed < earliest ? completed : earliest;
+      }, new Date());
+      numDays = Math.max(7, Math.ceil((new Date().getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    } else {
+      numDays = progressDaysRange;
+    }
+
+    for (let i = numDays - 1; i >= 0; i--) {
       const date = startOfDay(subDays(new Date(), i));
       const nextDay = startOfDay(subDays(new Date(), i - 1));
-      const count = completedReviews.filter((r) => {
+      const dayReviews = completedReviews.filter((r) => {
         if (!r.completedAt) return false;
         const completed = new Date(r.completedAt);
         return completed >= date && completed < nextDay;
-      }).length;
+      });
       days.push({
         label: format(date, 'EEE'),
         date: format(date, 'MMM d'),
-        count,
+        fullDate: format(date, 'EEEE, MMMM d, yyyy'),
+        count: dayReviews.length,
+        reviews: dayReviews,
       });
     }
     return days;
-  }, [completedReviews]);
+  }, [completedReviews, progressDaysRange]);
 
   // Helper to normalize names for matching (handles OCR variations)
   const normalizeName = (name: string): string => {
@@ -610,34 +631,133 @@ function App() {
 
                 {/* Daily Progress */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                  <h3 className="font-semibold text-slate-900 mb-6">Daily Progress (Last 7 Days)</h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-semibold text-slate-900">
+                      Daily Progress {progressDaysRange === 'all' ? '(All Time)' : `(Last ${progressDaysRange} Days)`}
+                    </h3>
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                      {([7, 14, 30, 'all'] as const).map((range) => (
+                        <button
+                          key={range}
+                          onClick={() => setProgressDaysRange(range)}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                            progressDaysRange === range
+                              ? 'bg-white text-blue-600 shadow-sm'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {range === 'all' ? 'All' : `${range}d`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   {(() => {
                     const maxDailyCount = Math.max(...dailyProgress.map(d => d.count), 1);
+                    const totalReviewsInRange = dailyProgress.reduce((sum, d) => sum + d.count, 0);
                     return (
-                      <div className="flex items-end justify-between gap-2 h-48">
-                        {dailyProgress.map((day) => {
-                          const height = day.count > 0 ? Math.max((day.count / maxDailyCount) * 100, 5) : 2;
-                          return (
-                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1 group">
-                              <div className="relative w-full h-36 flex items-end justify-center">
-                                {/* Tooltip on hover */}
-                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                  {day.count} review{day.count !== 1 ? 's' : ''}
-                                </div>
+                      <>
+                        <div className="text-sm text-slate-500 mb-4">
+                          {totalReviewsInRange} review{totalReviewsInRange !== 1 ? 's' : ''} completed
+                          {progressDaysRange !== 'all' && ` in the last ${progressDaysRange} days`}
+                        </div>
+                        <div className={`${progressDaysRange === 7 ? 'overflow-visible' : 'overflow-x-auto'} -mx-2 px-2`}>
+                          <div
+                            className="flex items-end gap-2 h-48"
+                            style={{ minWidth: progressDaysRange === 7 ? 'auto' : `${dailyProgress.length * 50}px` }}
+                          >
+                            {dailyProgress.map((day) => {
+                              const height = day.count > 0 ? Math.max((day.count / maxDailyCount) * 100, 5) : 2;
+                              return (
                                 <div
-                                  className="w-10 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-500 cursor-pointer hover:from-blue-600 hover:to-blue-500"
-                                  style={{ height: `${height}%` }}
-                                />
-                              </div>
-                              <span className="text-xs font-medium text-slate-400">{day.label}</span>
-                              <span className="text-xs text-slate-500">{day.date}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                                  key={day.date}
+                                  className="flex-1 min-w-[40px] flex flex-col items-center gap-1 group cursor-pointer"
+                                  onClick={() => setSelectedDayDetails({ date: day.fullDate, reviews: day.reviews })}
+                                >
+                                  <div className="relative w-full h-36 flex items-end justify-center">
+                                    {/* Tooltip on hover */}
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                      {day.count} review{day.count !== 1 ? 's' : ''} - Click for details
+                                    </div>
+                                    <div
+                                      className="w-10 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-300 hover:from-blue-600 hover:to-blue-500 hover:scale-105"
+                                      style={{ height: `${height}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs font-medium text-slate-400">{day.label}</span>
+                                  <span className="text-xs text-slate-500">{day.date}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
                     );
                   })()}
                 </div>
+
+                {/* Day Details Modal */}
+                {selectedDayDetails && (
+                  <div
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                    onClick={() => setSelectedDayDetails(null)}
+                  >
+                    <div
+                      className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="p-6 border-b border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-slate-900">{selectedDayDetails.date}</h3>
+                          <button
+                            onClick={() => setSelectedDayDetails(null)}
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                          >
+                            <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        <p className="text-sm text-slate-500 mt-1">
+                          {selectedDayDetails.reviews.length} review{selectedDayDetails.reviews.length !== 1 ? 's' : ''} completed
+                        </p>
+                      </div>
+                      <div className="p-4 overflow-y-auto max-h-[60vh]">
+                        {selectedDayDetails.reviews.length === 0 ? (
+                          <p className="text-center text-slate-500 py-8">No reviews completed on this day</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {selectedDayDetails.reviews.map((review) => (
+                              <div
+                                key={review.id}
+                                className="p-4 bg-slate-50 rounded-xl border border-slate-100"
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-slate-900 truncate">{review.title}</p>
+                                    {review.assigneeId && (
+                                      <p className="text-sm text-slate-500 mt-1">
+                                        Reviewed by: {review.assigneeId}
+                                      </p>
+                                    )}
+                                    {review.completedAt && (
+                                      <p className="text-xs text-slate-400 mt-1">
+                                        {format(new Date(review.completedAt), 'h:mm a')}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Reviewed
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Individual Progress */}
