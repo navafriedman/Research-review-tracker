@@ -8,6 +8,8 @@ import {
   TrendingUp,
   Users,
   Cloud,
+  Maximize2,
+  X,
 } from 'lucide-react';
 import { StatsCard, ProgressRing, AdminPanel, SettingsPanel } from './components';
 import type { Review, User } from './types';
@@ -78,6 +80,7 @@ function App() {
   // Daily progress chart state
   const [progressDaysRange, setProgressDaysRange] = useState<7 | 14 | 30 | 'all'>(7);
   const [selectedDayDetails, setSelectedDayDetails] = useState<{ date: string; reviews: Review[] } | null>(null);
+  const [isChartExpanded, setIsChartExpanded] = useState(false);
 
   // Save to localStorage when data changes (only if not in read-only mode)
   useEffect(() => {
@@ -630,12 +633,16 @@ function App() {
                 </div>
 
                 {/* Daily Progress */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div
+                  className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md transition-shadow group/card"
+                  onClick={() => setIsChartExpanded(true)}
+                >
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-semibold text-slate-900">
+                    <h3 className="font-semibold text-slate-900 flex items-center gap-2">
                       Daily Progress {progressDaysRange === 'all' ? '(All Time)' : `(Last ${progressDaysRange} Days)`}
+                      <Maximize2 className="w-4 h-4 text-slate-400 opacity-0 group-hover/card:opacity-100 transition-opacity" />
                     </h3>
-                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg" onClick={(e) => e.stopPropagation()}>
                       {([7, 14, 30, 'all'] as const).map((range) => (
                         <button
                           key={range}
@@ -671,7 +678,10 @@ function App() {
                                 <div
                                   key={day.date}
                                   className="flex-1 min-w-[40px] flex flex-col items-center gap-1 group cursor-pointer"
-                                  onClick={() => setSelectedDayDetails({ date: day.fullDate, reviews: day.reviews })}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedDayDetails({ date: day.fullDate, reviews: day.reviews });
+                                  }}
                                 >
                                   <div className="relative w-full h-36 flex items-end justify-center">
                                     {/* Tooltip on hover */}
@@ -754,6 +764,97 @@ function App() {
                             ))}
                           </div>
                         )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded Chart Modal */}
+                {isChartExpanded && (
+                  <div
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                    onClick={() => setIsChartExpanded(false)}
+                  >
+                    <div
+                      className="bg-white rounded-2xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="p-6 border-b border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xl font-semibold text-slate-900">
+                            Daily Progress {progressDaysRange === 'all' ? '(All Time)' : `(Last ${progressDaysRange} Days)`}
+                          </h3>
+                          <div className="flex items-center gap-4">
+                            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                              {([7, 14, 30, 'all'] as const).map((range) => (
+                                <button
+                                  key={range}
+                                  onClick={() => setProgressDaysRange(range)}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                                    progressDaysRange === range
+                                      ? 'bg-white text-blue-600 shadow-sm'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  {range === 'all' ? 'All' : `${range}d`}
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              onClick={() => setIsChartExpanded(false)}
+                              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                              <X className="w-5 h-5 text-slate-500" />
+                            </button>
+                          </div>
+                        </div>
+                        {(() => {
+                          const totalReviewsInRange = dailyProgress.reduce((sum, d) => sum + d.count, 0);
+                          return (
+                            <p className="text-sm text-slate-500 mt-2">
+                              {totalReviewsInRange} review{totalReviewsInRange !== 1 ? 's' : ''} completed
+                              {progressDaysRange !== 'all' && ` in the last ${progressDaysRange} days`}
+                            </p>
+                          );
+                        })()}
+                      </div>
+                      <div className="p-6 overflow-x-auto">
+                        {(() => {
+                          const maxDailyCount = Math.max(...dailyProgress.map(d => d.count), 1);
+                          return (
+                            <div
+                              className="flex items-end gap-3 h-80"
+                              style={{ minWidth: `${Math.max(dailyProgress.length * 60, 800)}px` }}
+                            >
+                              {dailyProgress.map((day) => {
+                                const height = day.count > 0 ? Math.max((day.count / maxDailyCount) * 100, 5) : 2;
+                                return (
+                                  <div
+                                    key={day.date}
+                                    className="flex-1 min-w-[50px] flex flex-col items-center gap-2 group cursor-pointer"
+                                    onClick={() => {
+                                      setSelectedDayDetails({ date: day.fullDate, reviews: day.reviews });
+                                    }}
+                                  >
+                                    <div className="relative w-full h-64 flex items-end justify-center">
+                                      {/* Tooltip on hover */}
+                                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-2 bg-slate-800 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
+                                        <div className="font-medium">{day.fullDate}</div>
+                                        <div className="text-slate-300">{day.count} review{day.count !== 1 ? 's' : ''}</div>
+                                      </div>
+                                      <div
+                                        className="w-12 rounded-t-lg bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-300 hover:from-blue-600 hover:to-blue-500 hover:scale-105"
+                                        style={{ height: `${height}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-sm font-medium text-slate-600">{day.label}</span>
+                                    <span className="text-xs text-slate-500">{day.date}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
