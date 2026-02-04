@@ -142,7 +142,7 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
       const importedReviews = (data.reviews || []).map((r: Record<string, string | null>) => ({
         title: r.title || '',
         status: r.status || 'pending',
-        completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+        completedAt: r.completedAt ? new Date(r.completedAt.includes('T') ? r.completedAt : r.completedAt + 'T00:00:00') : undefined,
         assigneeId: r.assigneeId || undefined,
         jurisdiction: r.jurisdiction || '',
       }));
@@ -246,7 +246,7 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
         const importedReviews = (data.reviews || []).map((r: Record<string, string | null>) => ({
           title: r.title || '',
           status: r.status || 'pending',
-          completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+          completedAt: r.completedAt ? new Date(r.completedAt.includes('T') ? r.completedAt : r.completedAt + 'T00:00:00') : undefined,
           assigneeId: r.assigneeId || undefined,
           jurisdiction: r.jurisdiction || '',
         }));
@@ -355,7 +355,7 @@ export function SettingsPanel({ reviews, teammates, onImportData }: SettingsPane
       const importedReviews = (data.reviews || []).map((r: Record<string, string>) => ({
         title: r.title || '',
         status: r.status || 'pending',
-        completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+        completedAt: r.completedAt ? new Date(r.completedAt.includes('T') ? r.completedAt : r.completedAt + 'T00:00:00') : undefined,
         assigneeId: r.assigneeId || undefined,
         jurisdiction: r.jurisdiction || '',
       }));

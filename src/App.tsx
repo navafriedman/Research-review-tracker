@@ -163,7 +163,7 @@ function App() {
             id: `cloud-${i}`,
             title: r.title || '',
             status: r.status || 'pending',
-            completedAt: r.completedAt ? new Date(r.completedAt + 'T00:00:00') : undefined,
+            completedAt: r.completedAt ? new Date(r.completedAt.includes('T') ? r.completedAt : r.completedAt + 'T00:00:00') : undefined,
             assigneeId: r.assigneeId || undefined,
             jurisdiction: r.jurisdiction || '',
           }));
@@ -749,11 +749,15 @@ function App() {
                                         Reviewed by: {review.assigneeId}
                                       </p>
                                     )}
-                                    {review.completedAt && (
-                                      <p className="text-xs text-slate-400 mt-1">
-                                        {format(new Date(review.completedAt), 'h:mm a')}
-                                      </p>
-                                    )}
+                                    {review.completedAt && (() => {
+                                      const d = new Date(review.completedAt);
+                                      const hasTime = d.getHours() !== 0 || d.getMinutes() !== 0 || d.getSeconds() !== 0;
+                                      return hasTime ? (
+                                        <p className="text-xs text-slate-400 mt-1">
+                                          {format(d, 'h:mm a')}
+                                        </p>
+                                      ) : null;
+                                    })()}
                                   </div>
                                   <div className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                                     <CheckCircle2 className="w-3 h-3" />
