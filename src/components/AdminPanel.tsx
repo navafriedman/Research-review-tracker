@@ -256,9 +256,18 @@ export function AdminPanel({
       const dateStr = row.reviewed_on || row.date || row.completed || row.completed_at || row.completeddate;
       const createdStr = row.created_at || row.created || dateStr;
 
-      // Parse dates (handle ISO format)
-      const parsedDate = dateStr ? new Date(dateStr) : undefined;
-      const createdDate = createdStr ? new Date(createdStr) : new Date();
+      // Parse dates - extract just the date part from ISO timestamps to avoid timezone issues
+      // e.g., "2026-02-06T14:51:45.860Z" -> "2026-02-06" -> Date at local midnight
+      const extractDate = (str: string): Date | undefined => {
+        if (!str || !str.trim()) return undefined;
+        // If it's an ISO timestamp, extract just the date part
+        const datePart = str.includes('T') ? str.split('T')[0] : str;
+        // Create date at local midnight to ensure consistent display
+        return new Date(datePart + 'T00:00:00');
+      };
+
+      const parsedDate = extractDate(dateStr);
+      const createdDate = extractDate(createdStr) || new Date();
 
       // Build title from entity_name + entity_type, or fall back to other fields
       const entityName = row.entity_name || row.name || row.title || '';
