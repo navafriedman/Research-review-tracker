@@ -33,6 +33,7 @@ const STORAGE_KEYS = {
   teammates: 'review-tracker-teammates',
   jsonbinApiKey: 'review-tracker-jsonbin-api-key',
   jsonbinBinId: 'review-tracker-jsonbin-bin-id',
+  goalTarget: 'review-tracker-goal-target',
 };
 
 // Load data from localStorage
@@ -72,6 +73,10 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [reviews, setReviews] = useState<Review[]>(() => loadFromStorage(STORAGE_KEYS.reviews, []));
   const [teammates, setTeammates] = useState<User[]>(() => loadFromStorage(STORAGE_KEYS.teammates, []));
+  const [goalTarget, setGoalTarget] = useState<number>(() => {
+    const stored = localStorage.getItem(STORAGE_KEYS.goalTarget);
+    return stored ? parseInt(stored, 10) : 352;
+  });
 
   const [isCloudLoading, setIsCloudLoading] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -94,6 +99,12 @@ function App() {
       saveToStorage(STORAGE_KEYS.teammates, teammates);
     }
   }, [teammates, isReadOnlyMode]);
+
+  useEffect(() => {
+    if (!isReadOnlyMode) {
+      localStorage.setItem(STORAGE_KEYS.goalTarget, String(goalTarget));
+    }
+  }, [goalTarget, isReadOnlyMode]);
 
   // Auto-sync to JSONBin when data changes (debounced)
   useEffect(() => {
@@ -249,7 +260,7 @@ function App() {
 
   // Calculate stats
   const completedReviews = reviews.filter((r) => r.status === 'reviewed');
-  const totalGoal = 352;
+  const totalGoal = goalTarget;
   const progressPercent = Math.round((completedReviews.length / totalGoal) * 100);
 
   // Daily progress for selected date range
@@ -916,6 +927,8 @@ function App() {
               onAddTeammate={handleAddTeammate}
               onUpdateTeammate={handleUpdateTeammate}
               onRemoveTeammate={handleRemoveTeammate}
+              goalTarget={goalTarget}
+              onUpdateGoalTarget={setGoalTarget}
             />
           )}
 

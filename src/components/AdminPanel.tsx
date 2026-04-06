@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2, Pencil, Check, ChevronDown, Calendar, CheckSquare } from 'lucide-react';
+import { Upload, Plus, Trash2, Save, FileSpreadsheet, X, Users, UserPlus, Image, Loader2, Pencil, Check, ChevronDown, Calendar, CheckSquare, TrendingUp } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import type { Review, User } from '../types';
 
@@ -15,6 +15,8 @@ interface AdminPanelProps {
   onRemoveTeammate: (id: string) => void;
   onBulkDelete?: (ids: string[]) => void;
   onBulkUpdate?: (ids: string[], updates: Partial<Review>) => void;
+  goalTarget?: number;
+  onUpdateGoalTarget?: (goal: number) => void;
 }
 
 export function AdminPanel({
@@ -27,6 +29,8 @@ export function AdminPanel({
   onAddTeammate,
   onUpdateTeammate,
   onRemoveTeammate,
+  goalTarget,
+  onUpdateGoalTarget,
 }: AdminPanelProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAddTeammate, setShowAddTeammate] = useState(false);
@@ -98,6 +102,9 @@ export function AdminPanel({
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState('');
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState(String(goalTarget || 352));
+
   const [editingTeammateId, setEditingTeammateId] = useState<string | null>(null);
   const [editTeammateForm, setEditTeammateForm] = useState({ name: '', email: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -574,8 +581,69 @@ export function AdminPanel({
     setShowAddTeammate(false);
   };
 
+  const handleSaveGoal = () => {
+    const parsed = parseInt(goalInput, 10);
+    if (!isNaN(parsed) && parsed > 0 && onUpdateGoalTarget) {
+      onUpdateGoalTarget(parsed);
+      setEditingGoal(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Goal Setting Section */}
+      {onUpdateGoalTarget && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
+              Review Goal
+            </h3>
+            {!editingGoal ? (
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold text-slate-900">{goalTarget}</span>
+                <button
+                  onClick={() => {
+                    setGoalInput(String(goalTarget || 352));
+                    setEditingGoal(true);
+                  }}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={goalInput}
+                  onChange={(e) => setGoalInput(e.target.value)}
+                  min="1"
+                  className="w-28 px-3 py-1.5 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-right"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveGoal();
+                    if (e.key === 'Escape') setEditingGoal(false);
+                  }}
+                />
+                <button
+                  onClick={handleSaveGoal}
+                  className="text-emerald-600 hover:text-emerald-700 p-2 hover:bg-emerald-50 rounded-lg transition-colors"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setEditingGoal(false)}
+                  className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Team Management Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div className="flex items-center justify-between mb-4">
